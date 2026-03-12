@@ -119,11 +119,11 @@ class LatexExporter {
     // Write column values as a table row if applicable
     if (doc.hasColumns && node.columnValues.isNotEmpty) {
       buf.writeln();
-      buf.writeln(r'\begin{tabular}{' + 'l' * doc.columns.length + '}');
+      buf.writeln('\\begin{tabular}{${'l' * doc.columns.length}}');
       buf.writeln(r'\toprule');
-      buf.writeln(doc.columns.map((c) => r'\textbf{' + _escapeLatex(c.name) + '}').join(' & ') + r' \\');
+      buf.writeln('${doc.columns.map((c) => '\\textbf{${_escapeLatex(c.name)}}').join(' & ')} \\\\');
       buf.writeln(r'\midrule');
-      buf.writeln(doc.columns.map((c) => _escapeLatex(node.columnValues[c.name] ?? '')).join(' & ') + r' \\');
+      buf.writeln('${doc.columns.map((c) => _escapeLatex(node.columnValues[c.name] ?? '')).join(' & ')} \\\\');
       buf.writeln(r'\bottomrule');
       buf.writeln(r'\end{tabular}');
       buf.writeln();
@@ -213,9 +213,9 @@ class LatexExporter {
         }
         buf.writeln(r'\begin{figure}[htbp]');
         buf.writeln(r'  \centering');
-        buf.writeln(r'  \includegraphics[width=0.8\textwidth]{images/' + path + '}');
+        buf.writeln('  \\includegraphics[width=0.8\\textwidth]{images/$path}');
         if (alt.isNotEmpty) {
-          buf.writeln(r'  \caption{' + _escapeLatex(alt) + '}');
+          buf.writeln('  \\caption{${_escapeLatex(alt)}}');
         }
         buf.writeln(r'\end{figure}');
         continue;
@@ -233,12 +233,11 @@ class LatexExporter {
         final cbMatch = RegExp(r'^\[( |x)\]\s*(.*)$').firstMatch(text);
         if (cbMatch != null) {
           final checked = cbMatch.group(1) == 'x';
-          text = (checked ? r'\checked' : r'\unchecked') +
-              ' ' +
-              _escapeLatexPreserveMath(cbMatch.group(2)!);
-          buf.writeln(r'  \item ' + text);
+          text =
+              '${checked ? r'\checked' : r'\unchecked'} ${_escapeLatexPreserveMath(cbMatch.group(2)!)}';
+          buf.writeln('  \\item $text');
         } else {
-          buf.writeln(r'  \item ' + _escapeLatexPreserveMath(text));
+          buf.writeln('  \\item ${_escapeLatexPreserveMath(text)}');
         }
         continue;
       } else if (inList) {
@@ -251,15 +250,15 @@ class LatexExporter {
       var processed = _escapeLatexPreserveMath(line);
       processed = processed.replaceAllMapped(
         RegExp(r'\*\*(.+?)\*\*'),
-        (m) => r'\textbf{' + m.group(1)! + '}',
+        (m) => '\\textbf{${m.group(1)!}}',
       );
       processed = processed.replaceAllMapped(
         RegExp(r'\*(.+?)\*'),
-        (m) => r'\textit{' + m.group(1)! + '}',
+        (m) => '\\textit{${m.group(1)!}}',
       );
       processed = processed.replaceAllMapped(
         RegExp(r'`(.+?)`'),
-        (m) => r'\texttt{' + m.group(1)! + '}',
+        (m) => '\\texttt{${m.group(1)!}}',
       );
 
       if (processed.trim().isNotEmpty) {

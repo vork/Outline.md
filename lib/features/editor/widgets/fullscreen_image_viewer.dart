@@ -54,7 +54,7 @@ class FullScreenImageViewer extends StatelessWidget {
                     child: Image(
                       image: image,
                       fit: BoxFit.contain,
-                      errorBuilder: (_, error, __) => const Center(
+                      errorBuilder: (_, error, _) => const Center(
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [

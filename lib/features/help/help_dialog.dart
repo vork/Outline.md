@@ -85,15 +85,15 @@ class _HelpDialog extends StatelessWidget {
                     ]),
                     if (isDesktop)
                       _section(theme, 'Keyboard Shortcuts', [
-                        '${platformModifierKey}+N  New document',
-                        '${platformModifierKey}+O  Open file',
-                        '${platformModifierKey}+S  Save file',
-                        '${platformModifierKey}+Enter  Commit cell',
+                        '$platformModifierKey+N  New document',
+                        '$platformModifierKey+O  Open file',
+                        '$platformModifierKey+S  Save file',
+                        '$platformModifierKey+Enter  Commit cell',
                         'Escape  Commit cell',
                         'Tab  Indent (increase heading level)',
                         'Shift+Tab  Outdent (decrease heading level)',
-                        '${platformModifierKey}+Up  Move section up',
-                        '${platformModifierKey}+Down  Move section down',
+                        '$platformModifierKey+Up  Move section up',
+                        '$platformModifierKey+Down  Move section down',
                         'Enter  Add new cell below',
                       ]),
                     if (isMobile)

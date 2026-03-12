@@ -89,7 +89,7 @@ class CellRenderer extends StatelessWidget {
       if (uri != null && (uri.scheme == 'http' || uri.scheme == 'https')) {
         image = Image.network(
           src,
-          errorBuilder: (_, err, __) => _imagePlaceholder(theme, alt, err),
+          errorBuilder: (_, err, _) => _imagePlaceholder(theme, alt, err),
         );
         onTapFullScreen = () =>
             FullScreenImageViewer.showNetwork(context, src, alt: alt);
@@ -101,7 +101,7 @@ class CellRenderer extends StatelessWidget {
         if (file.existsSync()) {
           image = Image.file(
             file,
-            errorBuilder: (_, err, __) => _imagePlaceholder(theme, alt, err),
+            errorBuilder: (_, err, _) => _imagePlaceholder(theme, alt, err),
           );
           onTapFullScreen = () =>
               FullScreenImageViewer.showFile(context, file, alt: alt);

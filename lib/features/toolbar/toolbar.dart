@@ -232,7 +232,7 @@ class OutlineToolbar extends ConsumerWidget {
     if (doc.isDirty) {
       final result = await _showUnsavedDialog(context);
       if (result == null) return;
-      if (result) await _saveFile(ref, context);
+      if (result && context.mounted) await _saveFile(ref, context);
     }
     ref.read(documentProvider.notifier).newDocument();
     ref.read(editorStateProvider.notifier).clearEditing();
@@ -243,7 +243,7 @@ class OutlineToolbar extends ConsumerWidget {
     if (doc.isDirty) {
       final result = await _showUnsavedDialog(context);
       if (result == null) return;
-      if (result) await _saveFile(ref, context);
+      if (result && context.mounted) await _saveFile(ref, context);
     }
 
     final loaded = await fileService.openFile();
