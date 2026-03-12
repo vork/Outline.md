@@ -1,0 +1,254 @@
+name: Build & Package App
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  FLUTTER_VERSION: "3.41.0"
+  APP_NAME: "OutlineMd"
+
+jobs:
+  # ════════════════════════════════════════════════════════════════════
+  # macOS (Apple Silicon)
+  # ════════════════════════════════════════════════════════════════════
+  build-macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test
+
+      # ── Code-signing certificate ─────────────────────────────────
+      - name: Import code-signing certificate
+        if: env.MACOS_CERTIFICATE_P12 != ''
+        env:
+          MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        run: |
+          CERT_FILE="$(mktemp /tmp/cert_XXXXXX).p12"
+          KEYCHAIN_FILE="/tmp/build-$(uuidgen).keychain-db"
+          KEYCHAIN_PASSWORD=$(openssl rand -hex 20)
+
+          echo "$MACOS_CERTIFICATE_P12" | base64 --decode > "$CERT_FILE"
+
+          security delete-keychain "$KEYCHAIN_FILE" 2>/dev/null || true
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_FILE"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_FILE"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_FILE"
+          security import "$CERT_FILE" -P "$MACOS_CERTIFICATE_PASSWORD" \
+            -A -t cert -f pkcs12 -k "$KEYCHAIN_FILE"
+          security set-key-partition-list -S apple-tool:,apple: \
+            -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_FILE"
+          security list-keychains -d user -s "$KEYCHAIN_FILE" $(security list-keychains -d user | tr -d '"')
+
+          echo "KEYCHAIN_FILE=$KEYCHAIN_FILE" >> "$GITHUB_ENV"
+          echo "KEYCHAIN_PASSWORD=$KEYCHAIN_PASSWORD" >> "$GITHUB_ENV"
+          rm -f "$CERT_FILE"
+
+      - name: Build macOS app
+        run: flutter build macos --release
+
+      # ── Code-sign & notarize ────────────────────────────────────
+      - name: Codesign app bundle
+        if: env.MACOS_CERTIFICATE_P12 != ''
+        env:
+          MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+          CERT_NAME: ${{ secrets.MACOS_CERT_NAME }}
+        run: |
+          APP_DIR="build/macos/Build/Products/Release"
+          APP_NAME=$(ls -d "$APP_DIR"/*.app | head -1)
+          ENTITLEMENTS="macos/Runner/Release.entitlements"
+
+          find "$APP_NAME/Contents/Frameworks" -type f \( -name "*.dylib" -o -perm +111 \) | while read lib; do
+            codesign --force --options runtime \
+              --sign "$CERT_NAME" \
+              --entitlements "$ENTITLEMENTS" "$lib"
+          done
+
+          find "$APP_NAME/Contents/Frameworks" -name "*.framework" -type d | while read fw; do
+            codesign --force --options runtime \
+              --sign "$CERT_NAME" \
+              --entitlements "$ENTITLEMENTS" "$fw"
+          done
+
+          codesign --force --options runtime \
+            --sign "$CERT_NAME" \
+            --entitlements "$ENTITLEMENTS" \
+            "$APP_NAME"
+
+          codesign --verify --deep --strict --verbose=2 "$APP_NAME"
+
+      - name: Notarize app
+        if: env.MACOS_CERTIFICATE_P12 != '' && env.APPLE_ID != ''
+        env:
+          MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          APP_DIR="build/macos/Build/Products/Release"
+          APP_NAME=$(ls -d "$APP_DIR"/*.app | head -1)
+
+          ditto -c -k --sequesterRsrc --keepParent "$APP_NAME" notarize-upload.zip
+
+          xcrun notarytool submit notarize-upload.zip \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_APP_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait --timeout 30m
+
+          xcrun stapler staple "$APP_NAME"
+          rm -f notarize-upload.zip
+
+      - name: Package macOS app
+        run: |
+          cd build/macos/Build/Products/Release
+          APP_NAME=$(ls -d *.app | head -1)
+          echo "Found app: $APP_NAME"
+          ditto -c -k --sequesterRsrc --keepParent "$APP_NAME" \
+                OutlineMd-macos-arm64.zip
+
+      - name: Clean up keychain
+        if: always() && env.KEYCHAIN_FILE != ''
+        run: security delete-keychain "$KEYCHAIN_FILE" || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-macos-arm64
+          path: build/macos/Build/Products/Release/OutlineMd-macos-arm64.zip
+
+  # ════════════════════════════════════════════════════════════════════
+  # Linux x86_64
+  # ════════════════════════════════════════════════════════════════════
+  build-linux:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev ninja-build \
+            clang cmake pkg-config libblkid-dev liblzma-dev
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build Linux app
+        run: flutter build linux --release
+
+      - name: Package Linux app
+        run: |
+          cd build/linux/x64/release
+          tar czf OutlineMd-linux-x86_64.tar.gz -C bundle .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-linux-x86_64
+          path: build/linux/x64/release/OutlineMd-linux-x86_64.tar.gz
+
+  # ════════════════════════════════════════════════════════════════════
+  # Windows x86_64
+  # ════════════════════════════════════════════════════════════════════
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build Windows app
+        run: flutter build windows --release
+
+      - name: Package Windows app
+        shell: pwsh
+        run: |
+          $bundle = "build\windows\x64\runner\Release"
+          Compress-Archive -Path "$bundle\*" -DestinationPath "OutlineMd-windows-x86_64.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-windows-x86_64
+          path: OutlineMd-windows-x86_64.zip
+
+  # ════════════════════════════════════════════════════════════════════
+  # Create GitHub Release (only on tag push)
+  # ════════════════════════════════════════════════════════════════════
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build-macos, build-linux, build-windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release-assets
+
+          cp artifacts/app-macos-arm64/OutlineMd-macos-arm64.zip       release-assets/
+          cp artifacts/app-linux-x86_64/OutlineMd-linux-x86_64.tar.gz  release-assets/
+          cp artifacts/app-windows-x86_64/OutlineMd-windows-x86_64.zip release-assets/
+
+          cd release-assets
+          sha256sum OutlineMd-*.zip OutlineMd-*.tar.gz | tee checksums.sha256
+
+          ls -la
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          body: |
+            ## Downloads
+
+            | Platform | File |
+            |----------|------|
+            | macOS (Apple Silicon) | `OutlineMd-macos-arm64.zip` |
+            | Linux (x86_64) | `OutlineMd-linux-x86_64.tar.gz` |
+            | Windows (x86_64) | `OutlineMd-windows-x86_64.zip` |
+
+            ### Verification
+            All checksums are in `checksums.sha256`. Verify after download:
+            ```
+            sha256sum -c checksums.sha256
+            ```
+          files: |
+            release-assets/OutlineMd-macos-arm64.zip
+            release-assets/OutlineMd-linux-x86_64.tar.gz
+            release-assets/OutlineMd-windows-x86_64.zip
+            release-assets/checksums.sha256
