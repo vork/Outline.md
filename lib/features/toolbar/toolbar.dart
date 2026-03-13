@@ -91,7 +91,7 @@ class OutlineToolbar extends ConsumerWidget {
               icon: Icons.add,
               tooltip: 'Add Node',
               onPressed: () {
-                ref.read(documentProvider.notifier).addNodeAtEnd();
+                ref.read(documentProvider.notifier).addNodeAfterActive();
               },
             ),
 
@@ -235,7 +235,10 @@ class OutlineToolbar extends ConsumerWidget {
       if (result && context.mounted) await _saveFile(ref, context);
     }
     ref.read(documentProvider.notifier).newDocument();
-    ref.read(editorStateProvider.notifier).clearEditing();
+    final newDoc = ref.read(documentProvider);
+    ref.read(editorStateProvider.notifier).resetTo(
+          newDoc.nodes.isNotEmpty ? newDoc.nodes.first.id : null,
+        );
   }
 
   Future<void> _openFile(WidgetRef ref, BuildContext context) async {
@@ -249,7 +252,9 @@ class OutlineToolbar extends ConsumerWidget {
     final loaded = await fileService.openFile();
     if (loaded != null) {
       ref.read(documentProvider.notifier).loadDocument(loaded);
-      ref.read(editorStateProvider.notifier).clearEditing();
+      ref.read(editorStateProvider.notifier).resetTo(
+            loaded.nodes.isNotEmpty ? loaded.nodes.first.id : null,
+          );
     }
   }
 

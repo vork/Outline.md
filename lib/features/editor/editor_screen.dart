@@ -20,6 +20,7 @@ class EditorScreen extends ConsumerStatefulWidget {
 class _EditorScreenState extends ConsumerState<EditorScreen> {
   final _fileService = FileService();
   final _scrollController = ScrollController();
+  final _editorFocusNode = FocusNode(debugLabel: 'EditorContent');
   final Map<String, GlobalKey> _nodeKeys = {};
   bool _isDragOver = false;
 
@@ -52,6 +53,9 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
         try {
           final doc = await _fileService.loadFromPath(path);
           ref.read(documentProvider.notifier).loadDocument(doc);
+          ref.read(editorStateProvider.notifier).resetTo(
+                doc.nodes.isNotEmpty ? doc.nodes.first.id : null,
+              );
         } catch (_) {}
         return;
       }
@@ -61,6 +65,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
   @override
   void dispose() {
     _scrollController.dispose();
+    _editorFocusNode.dispose();
     super.dispose();
   }
 
@@ -69,6 +74,18 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
     final doc = ref.watch(documentProvider);
     final sidebarVisible = ref.watch(sidebarVisibleProvider);
     final theme = Theme.of(context);
+
+    // Reclaim focus on the editor area when editing is cleared, so that
+    // keyboard shortcuts (like Enter → add node) keep working.
+    ref.listen(editorStateProvider, (previous, next) {
+      if (previous?.editingNodeId != null && next.editingNodeId == null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && !_editorFocusNode.hasFocus) {
+            _editorFocusNode.requestFocus();
+          }
+        });
+      }
+    });
 
     return OutlineKeyboardShortcuts(
       fileService: _fileService,
@@ -90,35 +107,40 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
                             onItemTap: _scrollToNode,
                           ),
                         Expanded(
-                          child: GestureDetector(
-                            onTap: () {
-                              final wasEditing = ref.read(editorStateProvider).editingNodeId != null;
-                              ref.read(editorStateProvider.notifier).clearEditing();
-                              if (wasEditing) {
-                                ref.read(documentProvider.notifier).rebuildTree();
-                              }
-                            },
-                            behavior: HitTestBehavior.translucent,
-                            child: Column(
-                              children: [
-                                const ColumnHeader(),
-                                Expanded(
-                                  child: doc.nodes.isEmpty
-                                      ? _EmptyState(
-                                          onAddNode: () {
-                                            ref
-                                                .read(documentProvider.notifier)
-                                                .addNodeAtEnd(headingLevel: 1);
-                                          },
-                                        )
-                                      : NodeTreeView(
-                                          nodes: doc.nodes,
-                                          scrollController: _scrollController,
-                                          nodeKeyFactory: _keyForNode,
-                                        ),
-                                ),
-                                _BottomBar(theme: theme),
-                              ],
+                          child: Focus(
+                            focusNode: _editorFocusNode,
+                            autofocus: true,
+                            child: GestureDetector(
+                              onTap: () {
+                                final wasEditing = ref.read(editorStateProvider).editingNodeId != null;
+                                ref.read(editorStateProvider.notifier).clearEditing();
+                                if (wasEditing) {
+                                  ref.read(documentProvider.notifier).rebuildTree();
+                                }
+                                _editorFocusNode.requestFocus();
+                              },
+                              behavior: HitTestBehavior.translucent,
+                              child: Column(
+                                children: [
+                                  const ColumnHeader(),
+                                  Expanded(
+                                    child: doc.nodes.isEmpty
+                                        ? _EmptyState(
+                                            onAddNode: () {
+                                              ref
+                                                  .read(documentProvider.notifier)
+                                                  .addNodeAtEnd(headingLevel: 1);
+                                            },
+                                          )
+                                        : NodeTreeView(
+                                            nodes: doc.nodes,
+                                            scrollController: _scrollController,
+                                            nodeKeyFactory: _keyForNode,
+                                          ),
+                                  ),
+                                  _BottomBar(theme: theme),
+                                ],
+                              ),
                             ),
                           ),
                         ),
@@ -252,7 +274,7 @@ class _BottomBar extends StatelessWidget {
               // Add node button
               TextButton.icon(
                 onPressed: () {
-                  ref.read(documentProvider.notifier).addNodeAtEnd();
+                  ref.read(documentProvider.notifier).addNodeAfterActive();
                 },
                 icon: const Icon(Icons.add, size: 14),
                 label: const Text('Add', style: TextStyle(fontSize: 12)),

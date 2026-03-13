@@ -79,7 +79,10 @@ class OutlineKeyboardShortcuts extends ConsumerWidget {
           _NewDocumentIntent: CallbackAction<_NewDocumentIntent>(
             onInvoke: (_) {
               ref.read(documentProvider.notifier).newDocument();
-              ref.read(editorStateProvider.notifier).clearEditing();
+              final doc = ref.read(documentProvider);
+              ref.read(editorStateProvider.notifier).resetTo(
+                    doc.nodes.isNotEmpty ? doc.nodes.first.id : null,
+                  );
               return null;
             },
           ),
@@ -88,7 +91,9 @@ class OutlineKeyboardShortcuts extends ConsumerWidget {
               final loaded = await fileService.openFile();
               if (loaded != null) {
                 ref.read(documentProvider.notifier).loadDocument(loaded);
-                ref.read(editorStateProvider.notifier).clearEditing();
+                ref.read(editorStateProvider.notifier).resetTo(
+                      loaded.nodes.isNotEmpty ? loaded.nodes.first.id : null,
+                    );
               }
               return null;
             },
@@ -142,13 +147,14 @@ class OutlineKeyboardShortcuts extends ConsumerWidget {
           _AddNodeIntent: CallbackAction<_AddNodeIntent>(
             onInvoke: (_) {
               final editorState = ref.read(editorStateProvider);
-              if (editorState.editingNodeId != null) return null;
-              final selected = editorState.selectedNodeId;
-              if (selected != null) {
-                ref.read(documentProvider.notifier).addNodeAfter(selected);
-              } else {
-                ref.read(documentProvider.notifier).addNodeAtEnd();
+              if (editorState.editingNodeId != null) {
+                // If we're nominally editing but Enter reached the Shortcuts
+                // widget (TextField doesn't have focus yet), commit the current
+                // cell and create a new node after it.
+                ref.read(editorStateProvider.notifier).clearEditing();
+                ref.read(documentProvider.notifier).rebuildTree();
               }
+              ref.read(documentProvider.notifier).addNodeAfterActive();
               return null;
             },
           ),

@@ -105,6 +105,28 @@ class DocumentNotifier extends Notifier<OutlineDocument> {
     ref.read(editorStateProvider.notifier).setEditingNode(newNode.id);
   }
 
+  /// Add a node after the currently active (selected) node, falling back to
+  /// the last node in the tree, or appending at the end if the tree is empty.
+  void addNodeAfterActive({int headingLevel = 0}) {
+    final editorState = ref.read(editorStateProvider);
+    var targetId = editorState.selectedNodeId;
+
+    if (targetId != null && findNode(state.nodes, targetId) == null) {
+      targetId = null;
+    }
+
+    if (targetId == null) {
+      final flat = flattenTree(state.nodes);
+      targetId = flat.isNotEmpty ? flat.last.id : null;
+    }
+
+    if (targetId != null) {
+      addNodeAfter(targetId, headingLevel: headingLevel);
+    } else {
+      addNodeAtEnd(headingLevel: headingLevel);
+    }
+  }
+
   void updateNodeContent(String id, String content) {
     // Only push undo snapshot when editing a *different* node to avoid
     // flooding the stack on every keystroke.
@@ -342,5 +364,9 @@ class EditorStateNotifier extends Notifier<EditorState> {
 
   void clearEditing() {
     state = EditorState(selectedNodeId: state.selectedNodeId);
+  }
+
+  void resetTo(String? nodeId) {
+    state = EditorState(selectedNodeId: nodeId);
   }
 }

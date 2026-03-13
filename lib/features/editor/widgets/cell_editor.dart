@@ -60,33 +60,40 @@ class _CellEditorState extends State<CellEditor> {
     super.dispose();
   }
 
+  KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+
+    final key = event.logicalKey;
+
+    if (key == LogicalKeyboardKey.enter &&
+        (HardwareKeyboard.instance.isMetaPressed ||
+            HardwareKeyboard.instance.isControlPressed)) {
+      _commit();
+      return KeyEventResult.handled;
+    }
+
+    if (key == LogicalKeyboardKey.escape) {
+      _commit();
+      return KeyEventResult.handled;
+    }
+
+    if (key == LogicalKeyboardKey.backspace &&
+        _controller.text.isEmpty &&
+        widget.onDelete != null) {
+      widget.onDelete!();
+      return KeyEventResult.handled;
+    }
+
+    return KeyEventResult.ignored;
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    return KeyboardListener(
-      focusNode: FocusNode(),
-      onKeyEvent: (event) {
-        if (event is KeyDownEvent) {
-          if (event.logicalKey == LogicalKeyboardKey.enter &&
-              (HardwareKeyboard.instance.isMetaPressed ||
-                  HardwareKeyboard.instance.isControlPressed)) {
-            _commit();
-            return;
-          }
-          if (event.logicalKey == LogicalKeyboardKey.escape) {
-            _commit();
-            return;
-          }
-          if (event.logicalKey == LogicalKeyboardKey.backspace &&
-              _controller.text.isEmpty &&
-              widget.onDelete != null) {
-            widget.onDelete!();
-            return;
-          }
-        }
-      },
+    return Focus(
+      onKeyEvent: _handleKeyEvent,
       child: Container(
         decoration: BoxDecoration(
           color: isDark ? const Color(0xFF2A2A2A) : Colors.white,
