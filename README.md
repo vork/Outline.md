@@ -1,5 +1,7 @@
 # Outline.md
 
+![Banner](imgs/Banner.jpg)
+
 A cross-platform, markdown-based hierarchical outline editor built with Flutter. Create structured documents using familiar markdown headings, export to LaTeX, and organize your thoughts with drag-and-drop, collapsible sections, and custom columns.
 
 ## Features
