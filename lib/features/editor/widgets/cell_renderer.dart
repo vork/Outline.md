@@ -115,33 +115,50 @@ class CellRenderer extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
-      child: GestureDetector(
-        onTap: onTapFullScreen,
-        child: Stack(
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(6),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 400),
-                child: image,
-              ),
-            ),
-            if (onTapFullScreen != null)
-              Positioned(
-                top: 4,
-                right: 4,
-                child: Material(
-                  color: Colors.black45,
-                  borderRadius: BorderRadius.circular(4),
-                  child: Padding(
-                    padding: const EdgeInsets.all(4),
-                    child: Icon(Icons.fullscreen,
-                        size: 16, color: Colors.white70),
+      child: Column(
+        children: [
+          GestureDetector(
+            onTap: onTapFullScreen,
+            child: Stack(
+              alignment: Alignment.topRight,
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(6),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 400),
+                    child: image,
                   ),
                 ),
+                if (onTapFullScreen != null)
+                  Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Material(
+                      color: Colors.black45,
+                      borderRadius: BorderRadius.circular(4),
+                      child: Padding(
+                        padding: const EdgeInsets.all(4),
+                        child: Icon(Icons.fullscreen,
+                            size: 16, color: Colors.white70),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          if (alt != null && alt.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                alt,
+                style: TextStyle(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  fontSize: 12,
+                  fontStyle: FontStyle.italic,
+                ),
+                textAlign: TextAlign.center,
               ),
-          ],
-        ),
+            ),
+        ],
       ),
     );
   }
