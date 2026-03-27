@@ -156,12 +156,13 @@ void main() {
       expect(goals.children[2].displayTitle, 'Milestone 3');
     });
 
-    test('Architecture has Backend, Frontend, System Diagram children', () {
+    test('Architecture has Backend, Frontend, API Endpoints, System Diagram children', () {
       final doc = parser.parse(source);
       final arch = doc.nodes[1];
       final childTitles = arch.children.map((n) => n.displayTitle).toList();
       expect(childTitles, contains('Backend'));
       expect(childTitles, contains('Frontend'));
+      expect(childTitles, contains('API Endpoints'));
       expect(childTitles, contains('System Diagram'));
     });
 
@@ -217,6 +218,18 @@ void main() {
       final frontend = findByTitle(doc.nodes, 'Frontend')!;
       expect(frontend.content, contains('```typescript'));
       expect(frontend.content, contains('function App()'));
+    });
+
+    // ── Table content ──────────────────────────────────────────
+
+    test('table is preserved in node content', () {
+      final doc = parser.parse(source);
+      final endpoints = findByTitle(doc.nodes, 'API Endpoints')!;
+      expect(endpoints.content, contains('| Method | Endpoint'));
+      expect(endpoints.content, contains('|--------|'));
+      expect(endpoints.content, contains('| GET    | /api/users'));
+      expect(endpoints.content, contains('| POST   | /api/users'));
+      expect(endpoints.content, contains('| DELETE | /api/users/:id'));
     });
 
     test('mermaid diagram is preserved in content', () {
@@ -349,6 +362,15 @@ void main() {
           reason: 'heading checkbox prefix not re-serialized');
     });
 
+    test('serialize preserves table', () {
+      final doc = parser.parse(source);
+      final md = serializer.serialize(doc);
+      expect(md, contains('| Method | Endpoint'));
+      expect(md, contains('|--------|'));
+      expect(md, contains('| GET    | /api/users'));
+      expect(md, contains('| DELETE | /api/users/:id'));
+    });
+
     test('serialize preserves code blocks and mermaid', () {
       final doc = parser.parse(source);
       final md = serializer.serialize(doc);
@@ -378,6 +400,15 @@ void main() {
       expect(md, contains(r'$$'));
       expect(md, contains(r'\int_{-\infty}^{\infty}'));
       expect(md, contains(r'\sqrt{\pi}'));
+    });
+
+    test('round-trip preserves table in node content', () {
+      final doc = parser.parse(source);
+      final md = serializer.serialize(doc);
+      final doc2 = parser.parse(md);
+      final endpoints2 = findByTitle(doc2.nodes, 'API Endpoints')!;
+      expect(endpoints2.content, contains('| Method | Endpoint'));
+      expect(endpoints2.content, contains('| GET    | /api/users'));
     });
 
     test('round-trip preserves inline math in node content', () {
@@ -415,6 +446,13 @@ void main() {
       expect(tex, contains(r'\textbf{Status}'));
       expect(tex, contains(r'\textbf{Owner}'));
       expect(tex, contains('Planning'));
+    });
+
+    test('LaTeX contains table content from markdown table', () {
+      final doc = parser.parse(source);
+      final tex = latexExporter.generateTex(doc);
+      expect(tex, contains('/api/users'));
+      expect(tex, contains('Delete a user'));
     });
 
     test('LaTeX contains code listings', () {

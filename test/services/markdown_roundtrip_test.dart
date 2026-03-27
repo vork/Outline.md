@@ -100,6 +100,20 @@ We want to achieve great things.
       expect(output, contains('Carol'));
     });
 
+    test('table survives round-trip', () {
+      const input = '# Data\n\n'
+          '| Name | Value |\n'
+          '|------|-------|\n'
+          '| Foo  | 42    |\n'
+          '| Bar  | 7     |\n';
+      final doc = parser.parse(input);
+      final output = serializer.serialize(doc);
+      expect(output, contains('| Name | Value |'));
+      expect(output, contains('|------|'));
+      expect(output, contains('| Foo  | 42'));
+      expect(output, contains('| Bar  | 7'));
+    });
+
     test('inline math survives round-trip', () {
       const input = r'# Math Section' '\n'
           r'The quadratic formula is $x = \frac{-b}{2a}$ and $\alpha = 1$.'

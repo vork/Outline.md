@@ -69,7 +69,7 @@ class CellRenderer extends StatelessWidget {
     return MarkdownBody(
       data: data,
       styleSheet: markdownStyleSheet(context),
-      selectable: true,
+      selectable: false,
       inlineSyntaxes: [_MathInlineSyntax()],
       builders: {
         'code': _CodeBlockBuilder(theme),

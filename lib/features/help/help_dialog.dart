@@ -94,7 +94,10 @@ class _HelpDialog extends StatelessWidget {
                         'Shift+Tab  Outdent (decrease heading level)',
                         '$platformModifierKey+Up  Move section up',
                         '$platformModifierKey+Down  Move section down',
-                        'Enter  Add new cell below',
+                        'Up / Down  Select previous / next cell',
+                        'Enter  Add new cell below selected',
+                        'Shift+Enter  Edit selected cell',
+                        'Delete  Delete selected cell',
                       ]),
                     if (isMobile)
                       _section(theme, 'Touch Gestures', [

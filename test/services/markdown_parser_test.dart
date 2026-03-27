@@ -195,6 +195,37 @@ void main() {
       });
     });
 
+    group('table parsing', () {
+      test('table is preserved as body content under heading', () {
+        const md = '# Data\n\n'
+            '| Name  | Value |\n'
+            '|-------|-------|\n'
+            '| Alpha | 1     |\n'
+            '| Beta  | 2     |\n';
+        final doc = parser.parse(md);
+        expect(doc.nodes.length, 1);
+        expect(doc.nodes[0].content, contains('| Name  | Value |'));
+        expect(doc.nodes[0].content, contains('|-------|'));
+        expect(doc.nodes[0].content, contains('| Alpha | 1'));
+        expect(doc.nodes[0].content, contains('| Beta  | 2'));
+      });
+
+      test('standalone table without heading is body node', () {
+        const md = '| A | B |\n|---|---|\n| 1 | 2 |\n';
+        final doc = parser.parse(md);
+        expect(doc.nodes.length, 1);
+        expect(doc.nodes[0].headingLevel, 0);
+        expect(doc.nodes[0].content, contains('| A | B |'));
+      });
+
+      test('table pipes are not confused with column separators', () {
+        const md = '# Heading\n\n| Col1 | Col2 |\n|------|------|\n| a    | b    |\n';
+        final doc = parser.parse(md);
+        expect(doc.nodes[0].columnValues, isEmpty);
+        expect(doc.nodes[0].content, contains('| Col1 | Col2 |'));
+      });
+    });
+
     group('math expressions', () {
       test('inline math is preserved as part of body content', () {
         const input = r'# Formulas' '\n'

@@ -100,6 +100,7 @@ class _OutlineCellState extends ConsumerState<OutlineCell> {
             ),
           ),
           child: InkWell(
+            canRequestFocus: false,
             onTap: () {
               final currentEditing =
                   ref.read(editorStateProvider).editingNodeId;
@@ -111,6 +112,11 @@ class _OutlineCellState extends ConsumerState<OutlineCell> {
               ref
                   .read(editorStateProvider.notifier)
                   .setSelectedNode(widget.node.id);
+            },
+            onDoubleTap: () {
+              ref
+                  .read(editorStateProvider.notifier)
+                  .setEditingNode(widget.node.id);
             },
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 2),
@@ -175,15 +181,19 @@ class _OutlineCellState extends ConsumerState<OutlineCell> {
                               child: SizedBox(
                                 width: 20,
                                 height: 20,
-                                child: Checkbox(
-                                  value: widget.node.isChecked,
-                                  onChanged: (_) {
-                                    ref
-                                        .read(documentProvider.notifier)
-                                        .toggleChecked(widget.node.id);
-                                  },
-                                  materialTapTargetSize:
-                                      MaterialTapTargetSize.shrinkWrap,
+                                child: Focus(
+                                  canRequestFocus: false,
+                                  descendantsAreFocusable: false,
+                                  child: Checkbox(
+                                    value: widget.node.isChecked,
+                                    onChanged: (_) {
+                                      ref
+                                          .read(documentProvider.notifier)
+                                          .toggleChecked(widget.node.id);
+                                    },
+                                    materialTapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
+                                  ),
                                 ),
                               ),
                             ),
@@ -398,7 +408,10 @@ class _CellMenu extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    return PopupMenuButton<String>(
+    return Focus(
+      canRequestFocus: false,
+      descendantsAreFocusable: false,
+      child: PopupMenuButton<String>(
       iconSize: 16,
       icon: Icon(
         Icons.more_vert,
@@ -454,6 +467,7 @@ class _CellMenu extends ConsumerWidget {
           child: Text('Delete', style: TextStyle(color: Colors.red)),
         ),
       ],
+    ),
     );
   }
 }

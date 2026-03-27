@@ -1,9 +1,11 @@
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/document_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../services/file_service.dart';
+import '../../utils/tree_utils.dart';
 import '../sidebar/sidebar_panel.dart';
 import '../toolbar/toolbar.dart';
 import 'helpers/keyboard_shortcuts.dart';
@@ -62,6 +64,101 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
     }
   }
 
+  KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
+    }
+
+    final editorState = ref.read(editorStateProvider);
+    final isEditing = editorState.editingNodeId != null;
+    final key = event.logicalKey;
+    final isShift = HardwareKeyboard.instance.isShiftPressed;
+    final hasCmdCtrl = HardwareKeyboard.instance.isMetaPressed ||
+        HardwareKeyboard.instance.isControlPressed;
+
+    if (isEditing || hasCmdCtrl) return KeyEventResult.ignored;
+
+    if (key == LogicalKeyboardKey.arrowUp) {
+      _selectAdjacentNode(-1);
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.arrowDown) {
+      _selectAdjacentNode(1);
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.enter && isShift) {
+      final selected = editorState.selectedNodeId;
+      if (selected != null) {
+        ref.read(editorStateProvider.notifier).setEditingNode(selected);
+      }
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.enter) {
+      ref.read(documentProvider.notifier).addNodeAfterActive();
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.delete ||
+        key == LogicalKeyboardKey.backspace) {
+      _deleteSelectedNode();
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.tab && isShift) {
+      final selected = editorState.selectedNodeId;
+      if (selected != null) {
+        ref.read(documentProvider.notifier).outdentNode(selected);
+      }
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.tab) {
+      final selected = editorState.selectedNodeId;
+      if (selected != null) {
+        ref.read(documentProvider.notifier).indentNode(selected);
+      }
+      return KeyEventResult.handled;
+    }
+
+    return KeyEventResult.ignored;
+  }
+
+  void _selectAdjacentNode(int delta) {
+    final doc = ref.read(documentProvider);
+    final visible = visibleNodes(doc.nodes).map((e) => e.$1).toList();
+    if (visible.isEmpty) return;
+    final selected = ref.read(editorStateProvider).selectedNodeId;
+    final idx = visible.indexWhere((n) => n.id == selected);
+    if (idx < 0) {
+      ref
+          .read(editorStateProvider.notifier)
+          .setSelectedNode(delta > 0 ? visible.first.id : visible.last.id);
+    } else {
+      final next = idx + delta;
+      if (next >= 0 && next < visible.length) {
+        ref
+            .read(editorStateProvider.notifier)
+            .setSelectedNode(visible[next].id);
+      }
+    }
+  }
+
+  void _deleteSelectedNode() {
+    final editorState = ref.read(editorStateProvider);
+    final selected = editorState.selectedNodeId;
+    if (selected == null) return;
+    final doc = ref.read(documentProvider);
+    final visible = visibleNodes(doc.nodes).map((e) => e.$1).toList();
+    final idx = visible.indexWhere((n) => n.id == selected);
+    String? nextId;
+    if (idx >= 0) {
+      if (idx + 1 < visible.length) {
+        nextId = visible[idx + 1].id;
+      } else if (idx > 0) {
+        nextId = visible[idx - 1].id;
+      }
+    }
+    ref.read(documentProvider.notifier).deleteNode(selected);
+    ref.read(editorStateProvider.notifier).setSelectedNode(nextId);
+  }
+
   @override
   void dispose() {
     _scrollController.dispose();
@@ -80,10 +177,20 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
     ref.listen(editorStateProvider, (previous, next) {
       if (previous?.editingNodeId != null && next.editingNodeId == null) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted && !_editorFocusNode.hasFocus) {
+          if (mounted && !_editorFocusNode.hasPrimaryFocus) {
             _editorFocusNode.requestFocus();
           }
         });
+      }
+      if (next.editingNodeId == null &&
+          next.selectedNodeId != null &&
+          next.selectedNodeId != previous?.selectedNodeId) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && !_editorFocusNode.hasPrimaryFocus) {
+            _editorFocusNode.requestFocus();
+          }
+        });
+        _scrollToNode(next.selectedNodeId!);
       }
     });
 
@@ -107,10 +214,23 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
                             onItemTap: _scrollToNode,
                           ),
                         Expanded(
-                          child: Focus(
-                            focusNode: _editorFocusNode,
-                            autofocus: true,
-                            child: GestureDetector(
+                          child: Listener(
+                            onPointerDown: (_) {
+                              WidgetsBinding.instance
+                                  .addPostFrameCallback((_) {
+                                if (mounted &&
+                                    ref.read(editorStateProvider).editingNodeId ==
+                                        null &&
+                                    !_editorFocusNode.hasPrimaryFocus) {
+                                  _editorFocusNode.requestFocus();
+                                }
+                              });
+                            },
+                            child: Focus(
+                              focusNode: _editorFocusNode,
+                              autofocus: true,
+                              onKeyEvent: _handleKeyEvent,
+                              child: GestureDetector(
                               onTap: () {
                                 final wasEditing = ref.read(editorStateProvider).editingNodeId != null;
                                 ref.read(editorStateProvider.notifier).clearEditing();
@@ -143,6 +263,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
                               ),
                             ),
                           ),
+                        ),
                         ),
                       ],
                     ),

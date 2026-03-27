@@ -44,10 +44,7 @@ class OutlineKeyboardShortcuts extends ConsumerWidget {
                 LogicalKeyboardKey.keyZ):
             const _RedoIntent(),
 
-        // Node operations
-        LogicalKeySet(LogicalKeyboardKey.tab): const _IndentIntent(),
-        LogicalKeySet(LogicalKeyboardKey.shift, LogicalKeyboardKey.tab):
-            const _OutdentIntent(),
+        // Node reordering (modifier keys — not handled by Focus.onKeyEvent)
         LogicalKeySet(
                 LogicalKeyboardKey.meta, LogicalKeyboardKey.arrowUp):
             const _MoveUpIntent(),
@@ -60,7 +57,6 @@ class OutlineKeyboardShortcuts extends ConsumerWidget {
         LogicalKeySet(
                 LogicalKeyboardKey.control, LogicalKeyboardKey.arrowDown):
             const _MoveDownIntent(),
-        LogicalKeySet(LogicalKeyboardKey.enter): const _AddNodeIntent(),
       },
       child: Actions(
         actions: {
@@ -108,24 +104,6 @@ class OutlineKeyboardShortcuts extends ConsumerWidget {
               return null;
             },
           ),
-          _IndentIntent: CallbackAction<_IndentIntent>(
-            onInvoke: (_) {
-              final selected = ref.read(editorStateProvider).selectedNodeId;
-              if (selected != null && ref.read(editorStateProvider).editingNodeId == null) {
-                ref.read(documentProvider.notifier).indentNode(selected);
-              }
-              return null;
-            },
-          ),
-          _OutdentIntent: CallbackAction<_OutdentIntent>(
-            onInvoke: (_) {
-              final selected = ref.read(editorStateProvider).selectedNodeId;
-              if (selected != null && ref.read(editorStateProvider).editingNodeId == null) {
-                ref.read(documentProvider.notifier).outdentNode(selected);
-              }
-              return null;
-            },
-          ),
           _MoveUpIntent: CallbackAction<_MoveUpIntent>(
             onInvoke: (_) {
               final selected = ref.read(editorStateProvider).selectedNodeId;
@@ -141,20 +119,6 @@ class OutlineKeyboardShortcuts extends ConsumerWidget {
               if (selected != null) {
                 ref.read(documentProvider.notifier).moveNodeDown(selected);
               }
-              return null;
-            },
-          ),
-          _AddNodeIntent: CallbackAction<_AddNodeIntent>(
-            onInvoke: (_) {
-              final editorState = ref.read(editorStateProvider);
-              if (editorState.editingNodeId != null) {
-                // If we're nominally editing but Enter reached the Shortcuts
-                // widget (TextField doesn't have focus yet), commit the current
-                // cell and create a new node after it.
-                ref.read(editorStateProvider.notifier).clearEditing();
-                ref.read(documentProvider.notifier).rebuildTree();
-              }
-              ref.read(documentProvider.notifier).addNodeAfterActive();
               return null;
             },
           ),
@@ -177,24 +141,12 @@ class _SaveFileIntent extends Intent {
   const _SaveFileIntent();
 }
 
-class _IndentIntent extends Intent {
-  const _IndentIntent();
-}
-
-class _OutdentIntent extends Intent {
-  const _OutdentIntent();
-}
-
 class _MoveUpIntent extends Intent {
   const _MoveUpIntent();
 }
 
 class _MoveDownIntent extends Intent {
   const _MoveDownIntent();
-}
-
-class _AddNodeIntent extends Intent {
-  const _AddNodeIntent();
 }
 
 class _UndoIntent extends Intent {
@@ -204,3 +156,4 @@ class _UndoIntent extends Intent {
 class _RedoIntent extends Intent {
   const _RedoIntent();
 }
+

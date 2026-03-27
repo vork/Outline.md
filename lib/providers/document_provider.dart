@@ -105,8 +105,10 @@ class DocumentNotifier extends Notifier<OutlineDocument> {
     ref.read(editorStateProvider.notifier).setEditingNode(newNode.id);
   }
 
-  /// Add a node after the currently active (selected) node, falling back to
-  /// the last node in the tree, or appending at the end if the tree is empty.
+  /// Add a node visually right below the currently active (selected) node.
+  /// If the selected node has visible children, the new node becomes its first
+  /// child so it appears directly below in the rendered list. Otherwise it is
+  /// inserted as a sibling after the selected node.
   void addNodeAfterActive({int headingLevel = 0}) {
     final editorState = ref.read(editorStateProvider);
     var targetId = editorState.selectedNodeId;
@@ -121,7 +123,16 @@ class DocumentNotifier extends Notifier<OutlineDocument> {
     }
 
     if (targetId != null) {
-      addNodeAfter(targetId, headingLevel: headingLevel);
+      final target = findNode(state.nodes, targetId);
+      if (target != null &&
+          !target.isCollapsed &&
+          target.children.isNotEmpty) {
+        final newNode = OutlineNode.create(headingLevel: headingLevel);
+        _mutate((nodes) => prependChild(nodes, targetId!, newNode));
+        ref.read(editorStateProvider.notifier).setEditingNode(newNode.id);
+      } else {
+        addNodeAfter(targetId, headingLevel: headingLevel);
+      }
     } else {
       addNodeAtEnd(headingLevel: headingLevel);
     }

@@ -49,6 +49,15 @@ function App(): JSX.Element {
 }
 ```
 
+## API Endpoints
+
+| Method | Endpoint       | Description         |
+|--------|----------------|---------------------|
+| GET    | /api/users     | List all users      |
+| POST   | /api/users     | Create a new user   |
+| GET    | /api/users/:id | Get user by ID      |
+| DELETE | /api/users/:id | Delete a user       |
+
 ## System Diagram
 
 ```mermaid

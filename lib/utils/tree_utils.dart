@@ -109,7 +109,7 @@ List<OutlineNode> insertBefore(
   return result;
 }
 
-/// Add a node as a child of a target node.
+/// Add a node as a child of a target node (appends at end).
 List<OutlineNode> addChild(
   List<OutlineNode> nodes,
   String parentId,
@@ -120,6 +120,20 @@ List<OutlineNode> addChild(
       return n.copyWith(children: [...n.children, child]);
     }
     return n.copyWith(children: addChild(n.children, parentId, child));
+  }).toList();
+}
+
+/// Add a node as the first child of a target node (prepends at start).
+List<OutlineNode> prependChild(
+  List<OutlineNode> nodes,
+  String parentId,
+  OutlineNode child,
+) {
+  return nodes.map((n) {
+    if (n.id == parentId) {
+      return n.copyWith(children: [child, ...n.children]);
+    }
+    return n.copyWith(children: prependChild(n.children, parentId, child));
   }).toList();
 }
 
