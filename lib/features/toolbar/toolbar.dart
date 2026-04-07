@@ -23,10 +23,7 @@ class OutlineToolbar extends ConsumerWidget {
     final theme = Theme.of(context);
     final sidebarVisible = ref.watch(sidebarVisibleProvider);
 
-    return GestureDetector(
-      // Allow dragging the window from the toolbar on desktop
-      behavior: HitTestBehavior.translucent,
-      child: Container(
+    return Container(
         padding: EdgeInsets.only(
           left: isDesktop && isMacOS ? 78 : 8, // space for traffic lights
           right: 8,
@@ -245,37 +242,8 @@ class OutlineToolbar extends ConsumerWidget {
             ),
 
             // Focus mode toggle
-            _ToolbarButton(
-              icon: ref.watch(focusModeProvider)
-                  ? Icons.center_focus_strong
-                  : Icons.center_focus_weak,
-              tooltip: ref.watch(focusModeProvider)
-                  ? 'Focus Mode: On'
-                  : 'Focus Mode: Off',
-              onPressed: () {
-                ref.read(focusModeProvider.notifier).state =
-                    !ref.read(focusModeProvider);
-              },
-            ),
-
-            // Theme toggle
-            _ToolbarButton(
-              icon: switch (themeMode) {
-                ThemeMode.system => Icons.brightness_auto,
-                ThemeMode.light => Icons.light_mode,
-                ThemeMode.dark => Icons.dark_mode,
-              },
-              tooltip: 'Theme: ${themeMode.name}',
-              onPressed: () {
-                ref.read(themeProvider.notifier).toggle();
-              },
-            ),
-
-            const SizedBox(width: 4),
-
-            // Font size slider (hide on narrow windows)
-            if (MediaQuery.of(context).size.width > 900)
-              _FontSizeControl(),
+            // Style menu (theme, font size, focus mode)
+            _StyleMenuButton(),
 
             // Help
             _ToolbarButton(
@@ -285,7 +253,6 @@ class OutlineToolbar extends ConsumerWidget {
             ),
           ],
         ),
-      ),
     );
   }
 
@@ -522,51 +489,147 @@ class OutlineToolbar extends ConsumerWidget {
   }
 }
 
-class _FontSizeControl extends ConsumerWidget {
+class _StyleMenuButton extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final scale = ref.watch(fontScaleProvider);
     final theme = Theme.of(context);
-    final color = theme.colorScheme.onSurface.withValues(alpha: 0.7);
-
-    // GestureDetector absorbs horizontal drags so they don't trigger
-    // the toolbar's window-drag handler.
-    return GestureDetector(
-      onHorizontalDragStart: (_) {},
-      onHorizontalDragUpdate: (_) {},
-      onHorizontalDragEnd: (_) {},
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.text_fields, size: 16, color: color),
-          SizedBox(
-            width: 90,
-            child: SliderTheme(
-            data: SliderThemeData(
-              trackHeight: 2,
-              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-              overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
-              activeTrackColor: theme.colorScheme.primary,
-              inactiveTrackColor: theme.colorScheme.onSurface.withValues(alpha: 0.15),
-              thumbColor: theme.colorScheme.primary,
-            ),
-            child: Slider(
-              value: scale,
-              min: minFontScale,
-              max: maxFontScale,
-              onChanged: (v) {
-                ref.read(fontScaleProvider.notifier).state =
-                    (v * 20).roundToDouble() / 20; // snap to 0.05 increments
-              },
-            ),
+    return IconButton(
+      icon: Icon(Icons.text_format, size: 18),
+      tooltip: 'Style',
+      splashRadius: 16,
+      padding: const EdgeInsets.all(6),
+      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+      onPressed: () {
+        final button = context.findRenderObject() as RenderBox;
+        final overlay =
+            Overlay.of(context).context.findRenderObject() as RenderBox;
+        final position = RelativeRect.fromRect(
+          Rect.fromPoints(
+            button.localToGlobal(Offset(0, button.size.height),
+                ancestor: overlay),
+            button.localToGlobal(
+                Offset(button.size.width, button.size.height),
+                ancestor: overlay),
           ),
-        ),
-        Text(
-          '${(scale * 100).round()}%',
-          style: TextStyle(fontSize: 10, color: color),
-        ),
-      ],
-    ),
+          Offset.zero & overlay.size,
+        );
+        showMenu<dynamic>(
+          context: context,
+          position: position,
+          items: <PopupMenuEntry<dynamic>>[
+            _buildThemeItem(context, ref),
+            const PopupMenuDivider(),
+            _buildFocusModeItem(context, ref),
+            const PopupMenuDivider(),
+            _buildFontSizeItem(context, ref),
+          ],
+        );
+      },
+    );
+  }
+
+  PopupMenuItem _buildThemeItem(BuildContext context, WidgetRef ref) {
+    final themeMode = ref.read(themeProvider);
+    return PopupMenuItem(
+      enabled: false,
+      child: StatefulBuilder(
+        builder: (context, setState) {
+          final mode = ref.watch(themeProvider);
+          return Row(
+            children: [
+              const Text('Theme'),
+              const Spacer(),
+              ToggleButtons(
+                isSelected: [
+                  mode == ThemeMode.light,
+                  mode == ThemeMode.system,
+                  mode == ThemeMode.dark,
+                ],
+                onPressed: (index) {
+                  final m = [ThemeMode.light, ThemeMode.system, ThemeMode.dark][index];
+                  ref.read(themeProvider.notifier).setMode(m);
+                },
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 28),
+                borderRadius: BorderRadius.circular(6),
+                children: const [
+                  Icon(Icons.light_mode, size: 16),
+                  Icon(Icons.brightness_auto, size: 16),
+                  Icon(Icons.dark_mode, size: 16),
+                ],
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  PopupMenuItem _buildFocusModeItem(BuildContext context, WidgetRef ref) {
+    return PopupMenuItem(
+      enabled: false,
+      child: StatefulBuilder(
+        builder: (context, setState) {
+          final focusMode = ref.watch(focusModeProvider);
+          return Row(
+            children: [
+              const Text('Focus Mode'),
+              const Spacer(),
+              Switch(
+                value: focusMode,
+                onChanged: (v) {
+                  ref.read(focusModeProvider.notifier).state = v;
+                },
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  PopupMenuItem _buildFontSizeItem(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    return PopupMenuItem(
+      enabled: false,
+      child: StatefulBuilder(
+        builder: (context, setState) {
+          final scale = ref.watch(fontScaleProvider);
+          return Row(
+            children: [
+              const Icon(Icons.text_fields, size: 16),
+              const SizedBox(width: 8),
+              Expanded(
+                child: SliderTheme(
+                  data: SliderThemeData(
+                    trackHeight: 2,
+                    thumbShape:
+                        const RoundSliderThumbShape(enabledThumbRadius: 6),
+                    overlayShape:
+                        const RoundSliderOverlayShape(overlayRadius: 12),
+                    activeTrackColor: theme.colorScheme.primary,
+                    inactiveTrackColor:
+                        theme.colorScheme.onSurface.withValues(alpha: 0.15),
+                    thumbColor: theme.colorScheme.primary,
+                  ),
+                  child: Slider(
+                    value: scale,
+                    min: minFontScale,
+                    max: maxFontScale,
+                    onChanged: (v) {
+                      ref.read(fontScaleProvider.notifier).state =
+                          (v * 20).roundToDouble() / 20;
+                    },
+                  ),
+                ),
+              ),
+              Text(
+                '${(scale * 100).round()}%',
+                style: TextStyle(fontSize: 10),
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 }
