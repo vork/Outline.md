@@ -4,6 +4,9 @@ import '../../providers/document_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../services/file_service.dart';
 import '../../services/latex_exporter.dart';
+import '../../services/web_import_service.dart';
+import '../../services/doc_import_service.dart';
+import '../../services/markdown_parser.dart';
 import '../../utils/platform_utils.dart';
 import 'package:file_picker/file_picker.dart';
 import '../help/help_dialog.dart';
@@ -175,6 +178,45 @@ class OutlineToolbar extends ConsumerWidget {
 
             const Spacer(),
 
+            // Import
+            PopupMenuButton<String>(
+              tooltip: 'Import',
+              icon: Icon(
+                Icons.download_outlined,
+                size: 18,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+              ),
+              onSelected: (action) {
+                if (action == 'url') {
+                  _importFromUrl(ref, context);
+                } else if (action == 'pdf_docx') {
+                  _importDocument(ref, context);
+                }
+              },
+              itemBuilder: (context) => [
+                const PopupMenuItem(
+                  value: 'url',
+                  child: Row(
+                    children: [
+                      Icon(Icons.language, size: 16),
+                      SizedBox(width: 8),
+                      Text('Import from URL...'),
+                    ],
+                  ),
+                ),
+                const PopupMenuItem(
+                  value: 'pdf_docx',
+                  child: Row(
+                    children: [
+                      Icon(Icons.picture_as_pdf, size: 16),
+                      SizedBox(width: 8),
+                      Text('Import PDF / DOCX...'),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+
             // Export
             PopupMenuButton<String>(
               tooltip: 'Export',
@@ -202,6 +244,20 @@ class OutlineToolbar extends ConsumerWidget {
               ],
             ),
 
+            // Focus mode toggle
+            _ToolbarButton(
+              icon: ref.watch(focusModeProvider)
+                  ? Icons.center_focus_strong
+                  : Icons.center_focus_weak,
+              tooltip: ref.watch(focusModeProvider)
+                  ? 'Focus Mode: On'
+                  : 'Focus Mode: Off',
+              onPressed: () {
+                ref.read(focusModeProvider.notifier).state =
+                    !ref.read(focusModeProvider);
+              },
+            ),
+
             // Theme toggle
             _ToolbarButton(
               icon: switch (themeMode) {
@@ -214,6 +270,12 @@ class OutlineToolbar extends ConsumerWidget {
                 ref.read(themeProvider.notifier).toggle();
               },
             ),
+
+            const SizedBox(width: 4),
+
+            // Font size slider (hide on narrow windows)
+            if (MediaQuery.of(context).size.width > 900)
+              _FontSizeControl(),
 
             // Help
             _ToolbarButton(
@@ -283,6 +345,118 @@ class OutlineToolbar extends ConsumerWidget {
     }
   }
 
+  Future<void> _importDocument(WidgetRef ref, BuildContext context) async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf', 'docx', 'doc'],
+      dialogTitle: 'Import Document',
+    );
+
+    if (result == null || result.files.isEmpty) return;
+    final filePath = result.files.single.path;
+    if (filePath == null) return;
+    if (!context.mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Importing document...')),
+    );
+
+    try {
+      final service = DocImportService();
+      final text = await service.importFile(filePath);
+      final parser = MarkdownParser();
+      final doc = parser.parse(text);
+
+      ref.read(documentProvider.notifier).loadDocument(doc);
+      ref.read(editorStateProvider.notifier).resetTo(
+            doc.nodes.isNotEmpty ? doc.nodes.first.id : null,
+          );
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Imported: ${doc.title}')),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Import failed: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _importFromUrl(WidgetRef ref, BuildContext context) async {
+    final controller = TextEditingController();
+    final url = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Import from URL'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(
+            hintText: 'https://example.com/article',
+            border: OutlineInputBorder(),
+            prefixIcon: Icon(Icons.language),
+          ),
+          onSubmitted: (value) {
+            if (value.trim().isNotEmpty) Navigator.pop(context, value.trim());
+          },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final value = controller.text.trim();
+              if (value.isNotEmpty) Navigator.pop(context, value);
+            },
+            child: const Text('Import'),
+          ),
+        ],
+      ),
+    );
+
+    if (url == null || url.isEmpty) return;
+    if (!context.mounted) return;
+
+    // Show loading indicator
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Importing from URL...')),
+    );
+
+    try {
+      final service = WebImportService();
+      final markdown = await service.importUrl(url);
+      final parser = MarkdownParser();
+      final doc = parser.parse(markdown);
+
+      ref.read(documentProvider.notifier).loadDocument(doc);
+      ref.read(editorStateProvider.notifier).resetTo(
+            doc.nodes.isNotEmpty ? doc.nodes.first.id : null,
+          );
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Imported: ${doc.title}')),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Import failed: $e')),
+        );
+      }
+    }
+  }
+
   Future<bool?> _showUnsavedDialog(BuildContext context) {
     return showDialog<bool>(
       context: context,
@@ -344,6 +518,48 @@ class OutlineToolbar extends ConsumerWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _FontSizeControl extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final scale = ref.watch(fontScaleProvider);
+    final theme = Theme.of(context);
+    final color = theme.colorScheme.onSurface.withValues(alpha: 0.7);
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(Icons.text_fields, size: 16, color: color),
+        SizedBox(
+          width: 90,
+          child: SliderTheme(
+            data: SliderThemeData(
+              trackHeight: 2,
+              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+              overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
+              activeTrackColor: theme.colorScheme.primary,
+              inactiveTrackColor: theme.colorScheme.onSurface.withValues(alpha: 0.15),
+              thumbColor: theme.colorScheme.primary,
+            ),
+            child: Slider(
+              value: scale,
+              min: minFontScale,
+              max: maxFontScale,
+              onChanged: (v) {
+                ref.read(fontScaleProvider.notifier).state =
+                    (v * 20).roundToDouble() / 20; // snap to 0.05 increments
+              },
+            ),
+          ),
+        ),
+        Text(
+          '${(scale * 100).round()}%',
+          style: TextStyle(fontSize: 10, color: color),
+        ),
+      ],
     );
   }
 }

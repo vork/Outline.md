@@ -10,12 +10,13 @@ class OutlineMdApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final themeMode = ref.watch(themeProvider);
+    final fontScale = ref.watch(fontScaleProvider);
 
     return MaterialApp(
       title: 'Outline.md',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.light(),
-      darkTheme: AppTheme.dark(),
+      theme: AppTheme.light(fontScale: fontScale),
+      darkTheme: AppTheme.dark(fontScale: fontScale),
       themeMode: themeMode,
       home: const EditorScreen(),
     );
