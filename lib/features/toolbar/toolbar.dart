@@ -489,10 +489,9 @@ class OutlineToolbar extends ConsumerWidget {
   }
 }
 
-class _StyleMenuButton extends ConsumerWidget {
+class _StyleMenuButton extends StatelessWidget {
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
+  Widget build(BuildContext context) {
     return IconButton(
       icon: Icon(Icons.text_format, size: 18),
       tooltip: 'Style',
@@ -501,135 +500,150 @@ class _StyleMenuButton extends ConsumerWidget {
       constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
       onPressed: () {
         final button = context.findRenderObject() as RenderBox;
-        final overlay =
-            Overlay.of(context).context.findRenderObject() as RenderBox;
-        final position = RelativeRect.fromRect(
-          Rect.fromPoints(
-            button.localToGlobal(Offset(0, button.size.height),
-                ancestor: overlay),
-            button.localToGlobal(
-                Offset(button.size.width, button.size.height),
-                ancestor: overlay),
-          ),
-          Offset.zero & overlay.size,
+        final offset = button.localToGlobal(
+          Offset(0, button.size.height),
         );
-        showMenu<dynamic>(
+        showDialog(
           context: context,
-          position: position,
-          items: <PopupMenuEntry<dynamic>>[
-            _buildThemeItem(context, ref),
-            const PopupMenuDivider(),
-            _buildFocusModeItem(context, ref),
-            const PopupMenuDivider(),
-            _buildFontSizeItem(context, ref),
-          ],
+          barrierColor: Colors.transparent,
+          builder: (_) => _StylePanel(anchor: offset),
         );
       },
     );
   }
+}
 
-  PopupMenuItem _buildThemeItem(BuildContext context, WidgetRef ref) {
-    final themeMode = ref.read(themeProvider);
-    return PopupMenuItem(
-      enabled: false,
-      child: StatefulBuilder(
-        builder: (context, setState) {
-          final mode = ref.watch(themeProvider);
-          return Row(
-            children: [
-              const Text('Theme'),
-              const Spacer(),
-              ToggleButtons(
-                isSelected: [
-                  mode == ThemeMode.light,
-                  mode == ThemeMode.system,
-                  mode == ThemeMode.dark,
-                ],
-                onPressed: (index) {
-                  final m = [ThemeMode.light, ThemeMode.system, ThemeMode.dark][index];
-                  ref.read(themeProvider.notifier).setMode(m);
-                },
-                constraints: const BoxConstraints(minWidth: 32, minHeight: 28),
-                borderRadius: BorderRadius.circular(6),
-                children: const [
-                  Icon(Icons.light_mode, size: 16),
-                  Icon(Icons.brightness_auto, size: 16),
-                  Icon(Icons.dark_mode, size: 16),
-                ],
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
+class _StylePanel extends ConsumerWidget {
+  final Offset anchor;
+  const _StylePanel({required this.anchor});
 
-  PopupMenuItem _buildFocusModeItem(BuildContext context, WidgetRef ref) {
-    return PopupMenuItem(
-      enabled: false,
-      child: StatefulBuilder(
-        builder: (context, setState) {
-          final focusMode = ref.watch(focusModeProvider);
-          return Row(
-            children: [
-              const Text('Focus Mode'),
-              const Spacer(),
-              Switch(
-                value: focusMode,
-                onChanged: (v) {
-                  ref.read(focusModeProvider.notifier).state = v;
-                },
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
-  PopupMenuItem _buildFontSizeItem(BuildContext context, WidgetRef ref) {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    return PopupMenuItem(
-      enabled: false,
-      child: StatefulBuilder(
-        builder: (context, setState) {
-          final scale = ref.watch(fontScaleProvider);
-          return Row(
-            children: [
-              const Icon(Icons.text_fields, size: 16),
-              const SizedBox(width: 8),
-              Expanded(
-                child: SliderTheme(
-                  data: SliderThemeData(
-                    trackHeight: 2,
-                    thumbShape:
-                        const RoundSliderThumbShape(enabledThumbRadius: 6),
-                    overlayShape:
-                        const RoundSliderOverlayShape(overlayRadius: 12),
-                    activeTrackColor: theme.colorScheme.primary,
-                    inactiveTrackColor:
-                        theme.colorScheme.onSurface.withValues(alpha: 0.15),
-                    thumbColor: theme.colorScheme.primary,
+    final themeMode = ref.watch(themeProvider);
+    final focusMode = ref.watch(focusModeProvider);
+    final scale = ref.watch(fontScaleProvider);
+
+    return Stack(
+      children: [
+        // Dismiss on tap outside
+        Positioned.fill(
+          child: GestureDetector(
+            onTap: () => Navigator.pop(context),
+            behavior: HitTestBehavior.translucent,
+          ),
+        ),
+        Positioned(
+          left: anchor.dx,
+          top: anchor.dy + 4,
+          child: Material(
+            elevation: 8,
+            borderRadius: BorderRadius.circular(12),
+            color: theme.colorScheme.surface,
+            surfaceTintColor: theme.colorScheme.surfaceTint,
+            child: Container(
+              width: 260,
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Theme
+                  Row(
+                    children: [
+                      Text('Theme', style: theme.textTheme.bodySmall),
+                      const Spacer(),
+                      ToggleButtons(
+                        isSelected: [
+                          themeMode == ThemeMode.light,
+                          themeMode == ThemeMode.system,
+                          themeMode == ThemeMode.dark,
+                        ],
+                        onPressed: (index) {
+                          final m = [
+                            ThemeMode.light,
+                            ThemeMode.system,
+                            ThemeMode.dark,
+                          ][index];
+                          ref.read(themeProvider.notifier).setMode(m);
+                        },
+                        constraints:
+                            const BoxConstraints(minWidth: 32, minHeight: 28),
+                        borderRadius: BorderRadius.circular(6),
+                        children: const [
+                          Icon(Icons.light_mode, size: 16),
+                          Icon(Icons.brightness_auto, size: 16),
+                          Icon(Icons.dark_mode, size: 16),
+                        ],
+                      ),
+                    ],
                   ),
-                  child: Slider(
-                    value: scale,
-                    min: minFontScale,
-                    max: maxFontScale,
-                    onChanged: (v) {
-                      ref.read(fontScaleProvider.notifier).state =
-                          (v * 20).roundToDouble() / 20;
-                    },
+                  const SizedBox(height: 8),
+                  Divider(height: 1),
+                  const SizedBox(height: 8),
+
+                  // Focus mode
+                  Row(
+                    children: [
+                      Text('Focus Mode', style: theme.textTheme.bodySmall),
+                      const Spacer(),
+                      SizedBox(
+                        height: 28,
+                        child: Switch(
+                          value: focusMode,
+                          onChanged: (v) {
+                            ref.read(focusModeProvider.notifier).state = v;
+                          },
+                        ),
+                      ),
+                    ],
                   ),
-                ),
+                  const SizedBox(height: 8),
+                  Divider(height: 1),
+                  const SizedBox(height: 8),
+
+                  // Font size
+                  Row(
+                    children: [
+                      Icon(Icons.text_fields, size: 16,
+                          color: theme.colorScheme.onSurfaceVariant),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: SliderTheme(
+                          data: SliderThemeData(
+                            trackHeight: 2,
+                            thumbShape: const RoundSliderThumbShape(
+                                enabledThumbRadius: 6),
+                            overlayShape: const RoundSliderOverlayShape(
+                                overlayRadius: 12),
+                            activeTrackColor: theme.colorScheme.primary,
+                            inactiveTrackColor: theme.colorScheme.onSurface
+                                .withValues(alpha: 0.15),
+                            thumbColor: theme.colorScheme.primary,
+                          ),
+                          child: Slider(
+                            value: scale,
+                            min: minFontScale,
+                            max: maxFontScale,
+                            onChanged: (v) {
+                              ref.read(fontScaleProvider.notifier).state =
+                                  (v * 20).roundToDouble() / 20;
+                            },
+                          ),
+                        ),
+                      ),
+                      Text(
+                        '${(scale * 100).round()}%',
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                ],
               ),
-              Text(
-                '${(scale * 100).round()}%',
-                style: TextStyle(fontSize: 10),
-              ),
-            ],
-          );
-        },
-      ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
