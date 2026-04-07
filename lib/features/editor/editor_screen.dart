@@ -164,12 +164,18 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
   void initState() {
     super.initState();
     _loadInitialFile();
+    // Listen for files opened while the app is already running (macOS)
+    onFileOpened = _openFileFromPath;
   }
 
   Future<void> _loadInitialFile() async {
     final path = initialFilePath;
     if (path == null) return;
     initialFilePath = null; // consume it
+    await _openFileFromPath(path);
+  }
+
+  Future<void> _openFileFromPath(String path) async {
     try {
       final doc = await _fileService.loadFromPath(path);
       ref.read(documentProvider.notifier).loadDocument(doc);
@@ -181,6 +187,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
 
   @override
   void dispose() {
+    onFileOpened = null;
     _scrollController.dispose();
     _editorFocusNode.dispose();
     super.dispose();
