@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import '../../../models/outline_node.dart';
 import 'outline_cell.dart';
 
@@ -25,7 +26,7 @@ class NodeTreeView extends StatelessWidget {
       return ListView(
         controller: scrollController,
         padding: const EdgeInsets.only(bottom: 100),
-        cacheExtent: 99999,
+        scrollCacheExtent: ScrollCacheExtent.pixels(99999),
         children: widgets,
       );
     }
