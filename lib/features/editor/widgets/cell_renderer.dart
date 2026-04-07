@@ -374,7 +374,7 @@ class _MathInlineBuilder extends MarkdownElementBuilder {
     TextStyle? preferredStyle,
     TextStyle? parentStyle,
   ) {
-    return Math.tex(
+    final mathWidget = Math.tex(
       element.textContent,
       textStyle: TextStyle(
         fontSize: (parentStyle?.fontSize ?? 14),
@@ -389,6 +389,12 @@ class _MathInlineBuilder extends MarkdownElementBuilder {
         ),
       ),
     );
+    // Wrap in Text.rich(WidgetSpan(...)) so flutter_markdown treats it as
+    // an inline span rather than a block widget that breaks text flow.
+    return Text.rich(WidgetSpan(
+      alignment: PlaceholderAlignment.middle,
+      child: mathWidget,
+    ));
   }
 }
 
