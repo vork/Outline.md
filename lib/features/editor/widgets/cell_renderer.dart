@@ -309,14 +309,11 @@ List<_Segment> _parseSegments(String content) {
 
 /// Patch unsupported LaTeX commands for flutter_math_fork compatibility.
 String _patchLatex(String tex) {
-  return tex
-      .replaceAll(r'\coloneq', r'\colonequals')
-      .replaceAll(r'\coloneqq', r':=')
-      .replaceAll(r'\Coloneqq', r'::=')
-      .replaceAll(r'\oslash', r'\emptyset')
-      .replaceAll(r'\mathrm{d}', r'\,d')
-      .replaceAll(r'\displaystyle', '')
-      .replaceAll(RegExp(r'\\text\{([^}]*)\}'), r'{\rm \1}');
+  // \coloneq (single q) is not supported; \coloneqq (double q) is
+  tex = tex.replaceAll(RegExp(r'\\coloneq(?!q)'), r'\coloneqq');
+  // \displaystyle is not needed in flutter_math rendering
+  tex = tex.replaceAll(r'\displaystyle', '');
+  return tex;
 }
 
 class _MathBlock extends StatelessWidget {
