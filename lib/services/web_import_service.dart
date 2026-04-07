@@ -234,16 +234,33 @@ class WebImportService {
 
   /// Restore single backslashes inside math delimiters.
   /// html2md escapes `\` to `\\` which breaks LaTeX rendering.
+  /// Remove markdown escaping inside math regions.
+  /// html2md escapes `\` to `\\`, `[` to `\[`, `]` to `\]`, etc.
+  /// These are valid markdown escapes but break LaTeX rendering.
+  String _unescapeMathContent(String content) {
+    // First: unescape doubled backslashes (must be first)
+    content = content.replaceAll(r'\\', r'\');
+    // Then: unescape markdown-escaped brackets/symbols that html2md adds.
+    // We use a regex to match backslash + specific char that markdown escapes
+    // but which are NOT valid LaTeX commands. \[ \] \* \_ \| are markdown
+    // escapes. \{ \} are valid LaTeX so we leave those alone.
+    content = content.replaceAllMapped(
+      RegExp(r'\\([\[\]\(\)\*_|~`>#\-+!])'),
+      (m) => m.group(1)!,
+    );
+    return content;
+  }
+
   String _unescapeBackslashesInMath(String text) {
     // Display math: $$...$$
     text = text.replaceAllMapped(
       RegExp(r'\$\$(.*?)\$\$', dotAll: true),
-      (m) => '\$\$${m.group(1)!.replaceAll(r'\\', r'\')}\$\$',
+      (m) => '\$\$${_unescapeMathContent(m.group(1)!)}\$\$',
     );
     // Inline math: $...$  (but not $$)
     text = text.replaceAllMapped(
       RegExp(r'(?<!\$)\$(?!\$)(.*?)(?<!\$)\$(?!\$)'),
-      (m) => '\$${m.group(1)!.replaceAll(r'\\', r'\')}\$',
+      (m) => '\$${_unescapeMathContent(m.group(1)!)}\$',
     );
     return text;
   }
