@@ -9,6 +9,7 @@ class CellEditor extends StatefulWidget {
   final VoidCallback? onCommitAndContinue;
   final VoidCallback? onDelete;
   final FocusNode? focusNode;
+  final bool focusMode;
 
   const CellEditor({
     super.key,
@@ -18,6 +19,7 @@ class CellEditor extends StatefulWidget {
     this.onCommitAndContinue,
     this.onDelete,
     this.focusNode,
+    this.focusMode = false,
   });
 
   @override
@@ -28,16 +30,28 @@ class _CellEditorState extends State<CellEditor> {
   late final TextEditingController _controller;
   late final FocusNode _focusNode;
   bool _committed = false;
+  int _currentLine = 0;
 
   @override
   void initState() {
     super.initState();
     _controller = TextEditingController(text: widget.content);
+    _controller.addListener(_onSelectionChanged);
     _focusNode = widget.focusNode ?? FocusNode();
     _focusNode.addListener(_onFocusChange);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _focusNode.requestFocus();
     });
+  }
+
+  void _onSelectionChanged() {
+    if (!widget.focusMode) return;
+    final offset = _controller.selection.baseOffset;
+    final text = _controller.text;
+    final line = text.substring(0, offset.clamp(0, text.length)).split('\n').length - 1;
+    if (line != _currentLine) {
+      setState(() => _currentLine = line);
+    }
   }
 
   void _commit() {
@@ -54,6 +68,7 @@ class _CellEditorState extends State<CellEditor> {
 
   @override
   void dispose() {
+    _controller.removeListener(_onSelectionChanged);
     _focusNode.removeListener(_onFocusChange);
     _controller.dispose();
     if (widget.focusNode == null) _focusNode.dispose();
@@ -152,46 +167,117 @@ class _CellEditorState extends State<CellEditor> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final fontSize = theme.textTheme.bodyMedium?.fontSize ?? 14;
+    final lineHeight = fontSize * 1.5;
+
+    final textField = TextField(
+      controller: _controller,
+      focusNode: _focusNode,
+      maxLines: null,
+      style: GoogleFonts.geistMono(
+        fontSize: fontSize,
+        color: theme.colorScheme.onSurface,
+        height: 1.5,
+      ),
+      decoration: InputDecoration(
+        contentPadding: const EdgeInsets.all(12),
+        border: InputBorder.none,
+        hintText: 'Type markdown here...',
+        hintStyle: GoogleFonts.geistMono(
+          color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
+          fontSize: fontSize,
+        ),
+      ),
+      onChanged: (value) {
+        if (value == '\n' && widget.onCommitAndContinue != null) {
+          _committed = true;
+          widget.onCommitAndContinue!();
+          return;
+        }
+        widget.onChanged(value);
+      },
+    );
+
+    final bgColor = isDark ? const Color(0xFF2A2A2A) : Colors.white;
 
     return Focus(
       onKeyEvent: _handleKeyEvent,
       child: Container(
         decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF2A2A2A) : Colors.white,
+          color: bgColor,
           borderRadius: BorderRadius.circular(6),
           border: Border.all(
             color: theme.colorScheme.primary.withValues(alpha: 0.5),
             width: 1.5,
           ),
         ),
-        child: TextField(
-          controller: _controller,
-          focusNode: _focusNode,
-          maxLines: null,
-          style: GoogleFonts.geistMono(
-            fontSize: theme.textTheme.bodyMedium?.fontSize ?? 14,
-            color: theme.colorScheme.onSurface,
-            height: 1.5,
-          ),
-          decoration: InputDecoration(
-            contentPadding: const EdgeInsets.all(12),
-            border: InputBorder.none,
-            hintText: 'Type markdown here...',
-            hintStyle: GoogleFonts.geistMono(
-              color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
-              fontSize: theme.textTheme.bodyMedium?.fontSize ?? 14,
-            ),
-          ),
-          onChanged: (value) {
-            if (value == '\n' && widget.onCommitAndContinue != null) {
-              _committed = true;
-              widget.onCommitAndContinue!();
-              return;
-            }
-            widget.onChanged(value);
-          },
-        ),
+        child: widget.focusMode
+            ? ClipRRect(
+                borderRadius: BorderRadius.circular(4.5),
+                child: Stack(
+                  children: [
+                    textField,
+                    Positioned.fill(
+                      child: IgnorePointer(
+                        child: CustomPaint(
+                          painter: _LineFocusPainter(
+                            currentLine: _currentLine,
+                            lineHeight: lineHeight,
+                            contentPadding: 12,
+                            dimColor: bgColor.withValues(alpha: 0.7),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            : textField,
       ),
     );
   }
+}
+
+class _LineFocusPainter extends CustomPainter {
+  final int currentLine;
+  final double lineHeight;
+  final double contentPadding;
+  final Color dimColor;
+
+  _LineFocusPainter({
+    required this.currentLine,
+    required this.lineHeight,
+    required this.contentPadding,
+    required this.dimColor,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..color = dimColor;
+
+    // The clear stripe for the active line
+    final activeTop = contentPadding + currentLine * lineHeight;
+    final activeBottom = activeTop + lineHeight;
+
+    // Dim above
+    if (activeTop > 0) {
+      canvas.drawRect(
+        Rect.fromLTRB(0, 0, size.width, activeTop),
+        paint,
+      );
+    }
+    // Dim below
+    if (activeBottom < size.height) {
+      canvas.drawRect(
+        Rect.fromLTRB(0, activeBottom, size.width, size.height),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_LineFocusPainter old) =>
+      old.currentLine != currentLine ||
+      old.lineHeight != lineHeight ||
+      old.dimColor != dimColor;
 }

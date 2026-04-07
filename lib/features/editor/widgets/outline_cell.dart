@@ -246,6 +246,7 @@ class _OutlineCellState extends ConsumerState<OutlineCell> {
                                                 .clearEditing();
                                           }
                                         : null,
+                                    focusMode: focusMode,
                                   )
                                 : CellRenderer(
                                     content: widget.node.content,
