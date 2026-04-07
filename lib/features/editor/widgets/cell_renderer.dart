@@ -307,6 +307,18 @@ List<_Segment> _parseSegments(String content) {
   return segments;
 }
 
+/// Patch unsupported LaTeX commands for flutter_math_fork compatibility.
+String _patchLatex(String tex) {
+  return tex
+      .replaceAll(r'\coloneq', r'\colonequals')
+      .replaceAll(r'\coloneqq', r':=')
+      .replaceAll(r'\Coloneqq', r'::=')
+      .replaceAll(r'\oslash', r'\emptyset')
+      .replaceAll(r'\mathrm{d}', r'\,d')
+      .replaceAll(r'\displaystyle', '')
+      .replaceAll(RegExp(r'\\text\{([^}]*)\}'), r'{\rm \1}');
+}
+
 class _MathBlock extends StatelessWidget {
   final String tex;
   final ThemeData theme;
@@ -315,29 +327,34 @@ class _MathBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final patchedTex = _patchLatex(tex);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Center(
         child: SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: Math.tex(
-            tex,
+            patchedTex,
             textStyle: TextStyle(
               fontSize: theme.textTheme.titleMedium?.fontSize ?? 18,
               color: theme.colorScheme.onSurface,
             ),
-            onErrorFallback: (err) => Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.errorContainer,
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Text(
-                tex,
-                style: TextStyle(
-                  fontFamily: 'monospace',
-                  fontSize: theme.textTheme.bodyMedium?.fontSize ?? 14,
-                  color: theme.colorScheme.onErrorContainer,
+            onErrorFallback: (err) => SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: theme.dividerColor),
+                ),
+                child: Text(
+                  '\$\$ $tex \$\$',
+                  style: TextStyle(
+                    fontFamily: 'monospace',
+                    fontSize: (theme.textTheme.bodySmall?.fontSize ?? 12),
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
                 ),
               ),
             ),
@@ -374,8 +391,9 @@ class _MathInlineBuilder extends MarkdownElementBuilder {
     TextStyle? preferredStyle,
     TextStyle? parentStyle,
   ) {
+    final patchedTex = _patchLatex(element.textContent);
     final mathWidget = Math.tex(
-      element.textContent,
+      patchedTex,
       textStyle: TextStyle(
         fontSize: (parentStyle?.fontSize ?? 14),
         color: theme.colorScheme.onSurface,
@@ -385,7 +403,7 @@ class _MathInlineBuilder extends MarkdownElementBuilder {
         style: TextStyle(
           fontFamily: 'monospace',
           fontSize: theme.textTheme.bodySmall?.fontSize ?? 12,
-          color: theme.colorScheme.error,
+          color: theme.colorScheme.onSurfaceVariant,
         ),
       ),
     );
