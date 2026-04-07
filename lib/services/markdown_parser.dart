@@ -71,7 +71,29 @@ class MarkdownParser {
       hasStartedNode = false;
     }
 
+    var inCodeBlock = false;
+
     for (final line in contentLines) {
+      // Track fenced code blocks so their content isn't parsed as headings
+      if (line.trimLeft().startsWith('```')) {
+        inCodeBlock = !inCodeBlock;
+        if (!hasStartedNode) {
+          hasStartedNode = true;
+          currentLevel = 0;
+        }
+        buffer.writeln(line);
+        continue;
+      }
+
+      if (inCodeBlock) {
+        if (!hasStartedNode) {
+          hasStartedNode = true;
+          currentLevel = 0;
+        }
+        buffer.writeln(line);
+        continue;
+      }
+
       final headingMatch = RegExp(r'^(#{1,6})\s+(.*)$').firstMatch(line);
 
       if (headingMatch != null) {

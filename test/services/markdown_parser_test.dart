@@ -226,6 +226,50 @@ void main() {
       });
     });
 
+    group('code block parsing', () {
+      test('ignores hash-like content inside fenced code blocks', () {
+        const md = '# Real Heading\n\n```\n# This is not a heading\n```\n\n# Another heading';
+        final doc = parser.parse(md);
+        final flat = _flattenNodes(doc.nodes);
+        final headings = flat.where((n) => n.headingLevel > 0).toList();
+        expect(headings.length, 2);
+        expect(headings[0].displayTitle, 'Real Heading');
+        expect(headings[1].displayTitle, 'Another heading');
+      });
+
+      test('preserves code block content including hash lines', () {
+        const md = '# Heading\n\n```python\n# comment\nprint("hi")\n```';
+        final doc = parser.parse(md);
+        expect(doc.nodes.length, 1);
+        expect(doc.nodes[0].content, contains('```python'));
+        expect(doc.nodes[0].content, contains('# comment'));
+        expect(doc.nodes[0].content, contains('print("hi")'));
+      });
+
+      test('handles mermaid code block with subgraph labels', () {
+        const md = '# Diagram\n\n```mermaid\nflowchart LR\n  subgraph geometry ["Geometry"]\n    XYZ["x, y, z"]\n  end\n```';
+        final doc = parser.parse(md);
+        final flat = _flattenNodes(doc.nodes);
+        expect(flat.where((n) => n.headingLevel > 0).length, 1);
+      });
+
+      test('handles multiple code blocks', () {
+        const md = '# A\n\n```\n# not heading\n```\n\n# B\n\n```\n## also not heading\n```\n\n# C';
+        final doc = parser.parse(md);
+        final flat = _flattenNodes(doc.nodes);
+        final headings = flat.where((n) => n.headingLevel > 0).toList();
+        expect(headings.length, 3);
+      });
+
+      test('code block without preceding heading becomes body node', () {
+        const md = '```\n# not a heading\nsome code\n```';
+        final doc = parser.parse(md);
+        expect(doc.nodes.length, 1);
+        expect(doc.nodes[0].headingLevel, 0);
+        expect(doc.nodes[0].content, contains('# not a heading'));
+      });
+    });
+
     group('math expressions', () {
       test('inline math is preserved as part of body content', () {
         const input = r'# Formulas' '\n'
