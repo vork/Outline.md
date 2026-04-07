@@ -20,7 +20,6 @@ class OutlineToolbar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final doc = ref.watch(documentProvider);
-    final themeMode = ref.watch(themeProvider);
     final theme = Theme.of(context);
     final sidebarVisible = ref.watch(sidebarVisibleProvider);
 
