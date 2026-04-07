@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -29,8 +30,10 @@ class CellEditor extends StatefulWidget {
 class _CellEditorState extends State<CellEditor> {
   late final TextEditingController _controller;
   late final FocusNode _focusNode;
+  final GlobalKey _textFieldKey = GlobalKey();
   bool _committed = false;
-  int _currentLine = 0;
+  // Active line rect relative to the TextField, updated from caret position.
+  Rect? _activeLineRect;
 
   @override
   void initState() {
@@ -46,12 +49,47 @@ class _CellEditorState extends State<CellEditor> {
 
   void _onSelectionChanged() {
     if (!widget.focusMode) return;
-    final offset = _controller.selection.baseOffset;
-    final text = _controller.text;
-    final line = text.substring(0, offset.clamp(0, text.length)).split('\n').length - 1;
-    if (line != _currentLine) {
-      setState(() => _currentLine = line);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final newRect = _getActiveLineRect();
+      if (newRect != _activeLineRect) {
+        setState(() => _activeLineRect = newRect);
+      }
+    });
+  }
+
+  /// Walk the render tree to find the RenderEditable and compute the caret line rect.
+  Rect? _getActiveLineRect() {
+    final fieldContext = _textFieldKey.currentContext;
+    if (fieldContext == null) return null;
+
+    RenderEditable? editable;
+    void visitor(Element element) {
+      if (editable != null) return;
+      if (element.renderObject is RenderEditable) {
+        editable = element.renderObject as RenderEditable;
+        return;
+      }
+      element.visitChildren(visitor);
     }
+    fieldContext.visitChildElements(visitor);
+    if (editable == null) return null;
+
+    final offset = _controller.selection.baseOffset;
+    final caretOffset = editable!.getLocalRectForCaret(
+      TextPosition(offset: offset.clamp(0, _controller.text.length)),
+    );
+
+    // Convert from RenderEditable coordinates to the TextField widget coordinates.
+    final editableBox = editable!;
+    final fieldBox = fieldContext.findRenderObject() as RenderBox;
+    final toField = editableBox.localToGlobal(Offset.zero) -
+        fieldBox.localToGlobal(Offset.zero);
+
+    final lineTop = toField.dy + caretOffset.top;
+    final lineBottom = toField.dy + caretOffset.bottom;
+
+    return Rect.fromLTRB(0, lineTop, fieldBox.size.width, lineBottom);
   }
 
   void _commit() {
@@ -168,9 +206,9 @@ class _CellEditorState extends State<CellEditor> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final fontSize = theme.textTheme.bodyMedium?.fontSize ?? 14;
-    final lineHeight = fontSize * 1.5;
 
     final textField = TextField(
+      key: _textFieldKey,
       controller: _controller,
       focusNode: _focusNode,
       maxLines: null,
@@ -217,18 +255,17 @@ class _CellEditorState extends State<CellEditor> {
                 child: Stack(
                   children: [
                     textField,
-                    Positioned.fill(
-                      child: IgnorePointer(
-                        child: CustomPaint(
-                          painter: _LineFocusPainter(
-                            currentLine: _currentLine,
-                            lineHeight: lineHeight,
-                            contentPadding: 12,
-                            dimColor: bgColor.withValues(alpha: 0.7),
+                    if (_activeLineRect != null)
+                      Positioned.fill(
+                        child: IgnorePointer(
+                          child: CustomPaint(
+                            painter: _LineFocusPainter(
+                              activeLineRect: _activeLineRect!,
+                              dimColor: bgColor.withValues(alpha: 0.7),
+                            ),
                           ),
                         ),
                       ),
-                    ),
                   ],
                 ),
               )
@@ -239,15 +276,11 @@ class _CellEditorState extends State<CellEditor> {
 }
 
 class _LineFocusPainter extends CustomPainter {
-  final int currentLine;
-  final double lineHeight;
-  final double contentPadding;
+  final Rect activeLineRect;
   final Color dimColor;
 
   _LineFocusPainter({
-    required this.currentLine,
-    required this.lineHeight,
-    required this.contentPadding,
+    required this.activeLineRect,
     required this.dimColor,
   });
 
@@ -255,21 +288,17 @@ class _LineFocusPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final paint = Paint()..color = dimColor;
 
-    // The clear stripe for the active line
-    final activeTop = contentPadding + currentLine * lineHeight;
-    final activeBottom = activeTop + lineHeight;
-
-    // Dim above
-    if (activeTop > 0) {
+    // Dim above the active line
+    if (activeLineRect.top > 0) {
       canvas.drawRect(
-        Rect.fromLTRB(0, 0, size.width, activeTop),
+        Rect.fromLTRB(0, 0, size.width, activeLineRect.top),
         paint,
       );
     }
-    // Dim below
-    if (activeBottom < size.height) {
+    // Dim below the active line
+    if (activeLineRect.bottom < size.height) {
       canvas.drawRect(
-        Rect.fromLTRB(0, activeBottom, size.width, size.height),
+        Rect.fromLTRB(0, activeLineRect.bottom, size.width, size.height),
         paint,
       );
     }
@@ -277,7 +306,6 @@ class _LineFocusPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_LineFocusPainter old) =>
-      old.currentLine != currentLine ||
-      old.lineHeight != lineHeight ||
+      old.activeLineRect != activeLineRect ||
       old.dimColor != dimColor;
 }
