@@ -10,7 +10,7 @@ MarkdownStyleSheet markdownStyleSheet(BuildContext context) {
   final codeBorder =
       isDark ? const Color(0xFF444444) : const Color(0xFFDDDDDD);
   final monoStyle = GoogleFonts.geistMono(
-    fontSize: 13,
+    fontSize: theme.textTheme.bodySmall?.fontSize ?? 12,
     color: theme.colorScheme.onSurface,
   );
 

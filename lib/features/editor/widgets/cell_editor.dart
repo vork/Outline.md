@@ -169,7 +169,7 @@ class _CellEditorState extends State<CellEditor> {
           focusNode: _focusNode,
           maxLines: null,
           style: GoogleFonts.geistMono(
-            fontSize: 14,
+            fontSize: theme.textTheme.bodyMedium?.fontSize ?? 14,
             color: theme.colorScheme.onSurface,
             height: 1.5,
           ),
@@ -179,7 +179,7 @@ class _CellEditorState extends State<CellEditor> {
             hintText: 'Type markdown here...',
             hintStyle: GoogleFonts.geistMono(
               color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
-              fontSize: 14,
+              fontSize: theme.textTheme.bodyMedium?.fontSize ?? 14,
             ),
           ),
           onChanged: (value) {

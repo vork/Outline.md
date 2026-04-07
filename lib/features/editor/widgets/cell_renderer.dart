@@ -310,7 +310,7 @@ class _MathBlock extends StatelessWidget {
           child: Math.tex(
             tex,
             textStyle: TextStyle(
-              fontSize: 18,
+              fontSize: theme.textTheme.titleMedium?.fontSize ?? 18,
               color: theme.colorScheme.onSurface,
             ),
             onErrorFallback: (err) => Container(
@@ -323,7 +323,7 @@ class _MathBlock extends StatelessWidget {
                 tex,
                 style: TextStyle(
                   fontFamily: 'monospace',
-                  fontSize: 14,
+                  fontSize: theme.textTheme.bodyMedium?.fontSize ?? 14,
                   color: theme.colorScheme.onErrorContainer,
                 ),
               ),
@@ -371,7 +371,7 @@ class _MathInlineBuilder extends MarkdownElementBuilder {
         '\$${element.textContent}\$',
         style: TextStyle(
           fontFamily: 'monospace',
-          fontSize: 13,
+          fontSize: theme.textTheme.bodySmall?.fontSize ?? 12,
           color: theme.colorScheme.error,
         ),
       ),
