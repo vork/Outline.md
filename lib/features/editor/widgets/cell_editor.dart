@@ -60,6 +60,16 @@ class _CellEditorState extends State<CellEditor> {
     super.dispose();
   }
 
+  static const _pairs = <String, String>{
+    '(': ')',
+    '[': ']',
+    '{': '}',
+    '"': '"',
+    '`': '`',
+  };
+
+  static const _closers = <String>{')', ']', '}'};
+
   KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
 
@@ -82,6 +92,57 @@ class _CellEditorState extends State<CellEditor> {
         widget.onDelete != null) {
       widget.onDelete!();
       return KeyEventResult.handled;
+    }
+
+    // Auto-pair brackets
+    final char = event.character;
+    if (char != null && _controller.selection.isCollapsed) {
+      final offset = _controller.selection.baseOffset;
+      final text = _controller.text;
+
+      // Typing a closing bracket that already exists after cursor → skip over it
+      if (_closers.contains(char) &&
+          offset < text.length &&
+          text[offset] == char) {
+        _controller.selection =
+            TextSelection.collapsed(offset: offset + 1);
+        return KeyEventResult.handled;
+      }
+
+      // Typing an opening bracket → insert pair
+      if (_pairs.containsKey(char)) {
+        final closer = _pairs[char]!;
+        // For quotes/backticks, skip pairing if character after cursor is alphanumeric
+        if ((char == '"' || char == '`') &&
+            offset < text.length &&
+            RegExp(r'[a-zA-Z0-9]').hasMatch(text[offset])) {
+          return KeyEventResult.ignored;
+        }
+        final newText =
+            text.substring(0, offset) + char + closer + text.substring(offset);
+        _controller.text = newText;
+        _controller.selection =
+            TextSelection.collapsed(offset: offset + 1);
+        widget.onChanged(newText);
+        return KeyEventResult.handled;
+      }
+
+      // Backspace deletes both brackets if cursor is between a pair
+      if (key == LogicalKeyboardKey.backspace &&
+          offset > 0 &&
+          offset < text.length) {
+        final before = text[offset - 1];
+        final after = text[offset];
+        if (_pairs[before] == after) {
+          final newText =
+              text.substring(0, offset - 1) + text.substring(offset + 1);
+          _controller.text = newText;
+          _controller.selection =
+              TextSelection.collapsed(offset: offset - 1);
+          widget.onChanged(newText);
+          return KeyEventResult.handled;
+        }
+      }
     }
 
     return KeyEventResult.ignored;

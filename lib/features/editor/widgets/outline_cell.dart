@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../models/outline_node.dart';
 import '../../../providers/document_provider.dart';
+import '../../../providers/theme_provider.dart';
 import 'cell_editor.dart';
 import 'cell_renderer.dart';
 
@@ -73,8 +74,14 @@ class _OutlineCellState extends ConsumerState<OutlineCell> {
       },
       builder: (context, candidateData, rejectedData) {
         final isDraggingOver = candidateData.isNotEmpty;
+        final focusMode = ref.watch(focusModeProvider);
+        final isActive = isSelected || isEditing;
+        final dimmed = focusMode && !isActive;
 
-        return AnimatedContainer(
+        return AnimatedOpacity(
+          duration: const Duration(milliseconds: 200),
+          opacity: dimmed ? 0.25 : 1.0,
+          child: AnimatedContainer(
           duration: const Duration(milliseconds: 100),
           decoration: BoxDecoration(
             color: isSelected
@@ -293,6 +300,7 @@ class _OutlineCellState extends ConsumerState<OutlineCell> {
               ),
             ),
           ),
+        ),
         );
       },
     );
