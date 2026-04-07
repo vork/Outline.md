@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Outline.md
+Comment=Markdown outliner and editor
+Exec=outline_md %U
+Icon=outline-md
+Type=Application
+MimeType=text/markdown;text/plain;text/x-markdown;
+Categories=Office;TextEditor;
+StartupNotify=true
+Terminal=false
