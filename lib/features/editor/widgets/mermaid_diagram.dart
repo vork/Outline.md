@@ -208,7 +208,7 @@ class _MermaidDiagramState extends State<MermaidDiagram> {
         final h = (data['height'] as num?)?.toDouble() ?? 300;
         final err = data['error'] as String?;
         setState(() {
-          _height = h.clamp(100, 800);
+          _height = h.clamp(100, 2000);
           _ready = true;
           _error = err;
         });
