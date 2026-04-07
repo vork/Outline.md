@@ -44,6 +44,9 @@ class WebImportService {
     // Post-process: convert MathJax delimiters to $/$$ syntax
     markdown = _convertMathJaxDelimiters(markdown);
 
+    // Post-process: normalize single-line $$ content $$ to multi-line
+    markdown = _normalizeDisplayMath(markdown);
+
     // Post-process: catch any remaining relative image URLs in markdown
     markdown = _resolveMarkdownImageUrls(markdown, uri);
 
@@ -240,6 +243,15 @@ class WebImportService {
       (m) => '\$${m.group(1)!.replaceAll(r'\\', r'\')}\$',
     );
     return text;
+  }
+
+  /// Normalize single-line `$$ content $$` to multi-line format so the
+  /// cell renderer can parse it as block math.
+  String _normalizeDisplayMath(String text) {
+    return text.replaceAllMapped(
+      RegExp(r'\$\$\s+(.+?)\s+\$\$'),
+      (m) => '\$\$\n${m.group(1)!.trim()}\n\$\$',
+    );
   }
 
   /// Convert MathJax `\(...\)` to `$...$` and `\[...\]` to `$$...$$`.

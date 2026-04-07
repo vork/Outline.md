@@ -254,7 +254,7 @@ List<_Segment> _parseSegments(String content) {
       continue;
     }
 
-    // Block math: $$ on its own line
+    // Block math: $$ on its own line (opening or closing delimiter)
     if (line.trim() == r'$$') {
       if (!inMath) {
         flushMarkdown();
@@ -263,6 +263,19 @@ List<_Segment> _parseSegments(String content) {
         inMath = false;
         segments.add(_Segment.math(mathBuf.toString().trim()));
         mathBuf.clear();
+      }
+      continue;
+    }
+
+    // Block math: $$ content $$ all on one line (with optional trailing punctuation)
+    final trimmedLine = line.trim();
+    final singleLineMath = RegExp(r'^\$\$\s*(.+?)\s*\$\$[,.\s;:]*$');
+    final slMatch = singleLineMath.firstMatch(trimmedLine);
+    if (!inMath && slMatch != null) {
+      flushMarkdown();
+      final mathContent = slMatch.group(1)!.trim();
+      if (mathContent.isNotEmpty) {
+        segments.add(_Segment.math(mathContent));
       }
       continue;
     }
