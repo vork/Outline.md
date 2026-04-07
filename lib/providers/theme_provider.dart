@@ -24,3 +24,15 @@ class ThemeNotifier extends Notifier<ThemeMode> {
 }
 
 final sidebarVisibleProvider = StateProvider<bool>((ref) => true);
+
+final focusModeProvider = StateProvider<bool>((ref) => false);
+
+final sidebarWidthProvider = StateProvider<double>((ref) => 260);
+
+const double minSidebarWidth = 180;
+const double maxSidebarWidth = 500;
+
+final fontScaleProvider = StateProvider<double>((ref) => 1.0);
+
+const double minFontScale = 0.75;
+const double maxFontScale = 1.5;

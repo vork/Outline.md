@@ -5,8 +5,9 @@ import 'sidebar_item.dart';
 
 class SidebarPanel extends ConsumerWidget {
   final ValueChanged<String>? onItemTap;
+  final double width;
 
-  const SidebarPanel({super.key, this.onItemTap});
+  const SidebarPanel({super.key, this.onItemTap, this.width = 260});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -15,7 +16,7 @@ class SidebarPanel extends ConsumerWidget {
     final isDark = theme.brightness == Brightness.dark;
 
     return Container(
-      width: 260,
+      width: width,
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF1E1E1E) : const Color(0xFFF5F5F5),
         border: Border(

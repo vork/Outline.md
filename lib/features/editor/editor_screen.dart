@@ -2,6 +2,7 @@ import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../main.dart';
 import '../../providers/document_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../services/file_service.dart';
@@ -160,6 +161,25 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    _loadInitialFile();
+  }
+
+  Future<void> _loadInitialFile() async {
+    final path = initialFilePath;
+    if (path == null) return;
+    initialFilePath = null; // consume it
+    try {
+      final doc = await _fileService.loadFromPath(path);
+      ref.read(documentProvider.notifier).loadDocument(doc);
+      ref.read(editorStateProvider.notifier).resetTo(
+            doc.nodes.isNotEmpty ? doc.nodes.first.id : null,
+          );
+    } catch (_) {}
+  }
+
+  @override
   void dispose() {
     _scrollController.dispose();
     _editorFocusNode.dispose();
@@ -209,10 +229,13 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
                   Expanded(
                     child: Row(
                       children: [
-                        if (sidebarVisible)
+                        if (sidebarVisible) ...[
                           SidebarPanel(
                             onItemTap: _scrollToNode,
+                            width: ref.watch(sidebarWidthProvider),
                           ),
+                          _SidebarResizeHandle(),
+                        ],
                         Expanded(
                           child: Listener(
                             onPointerDown: (_) {
@@ -363,6 +386,39 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
+class _SidebarResizeHandle extends ConsumerStatefulWidget {
+  @override
+  ConsumerState<_SidebarResizeHandle> createState() => _SidebarResizeHandleState();
+}
+
+class _SidebarResizeHandleState extends ConsumerState<_SidebarResizeHandle> {
+  bool _isHovering = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return MouseRegion(
+      cursor: SystemMouseCursors.resizeColumn,
+      onEnter: (_) => setState(() => _isHovering = true),
+      onExit: (_) => setState(() => _isHovering = false),
+      child: GestureDetector(
+        onHorizontalDragUpdate: (details) {
+          final current = ref.read(sidebarWidthProvider);
+          final newWidth = (current + details.delta.dx)
+              .clamp(minSidebarWidth, maxSidebarWidth);
+          ref.read(sidebarWidthProvider.notifier).state = newWidth;
+        },
+        child: Container(
+          width: 4,
+          color: _isHovering
+              ? theme.colorScheme.primary.withValues(alpha: 0.3)
+              : Colors.transparent,
+        ),
+      ),
+    );
+  }
+}
+
 class _BottomBar extends StatelessWidget {
   final ThemeData theme;
 
@@ -373,7 +429,18 @@ class _BottomBar extends StatelessWidget {
     return Consumer(
       builder: (context, ref, _) {
         final doc = ref.watch(documentProvider);
-        final nodeCount = _countNodes(doc.nodes);
+        final stats = _computeStats(doc.nodes);
+
+        final statStyle = theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+          fontSize: 11,
+        );
+        final divider = Text(
+          '  |  ',
+          style: statStyle?.copyWith(
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.2),
+          ),
+        );
 
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -384,13 +451,15 @@ class _BottomBar extends StatelessWidget {
           ),
           child: Row(
             children: [
-              Text(
-                '$nodeCount items',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
-                  fontSize: 11,
-                ),
-              ),
+              Text('${stats.nodeCount} items', style: statStyle),
+              divider,
+              Text('${_formatNumber(stats.wordCount)} words', style: statStyle),
+              divider,
+              Text('${_formatNumber(stats.charCount)} chars', style: statStyle),
+              divider,
+              Text('${stats.lineCount} lines', style: statStyle),
+              divider,
+              Text('~${stats.readTimeMinutes} min read', style: statStyle),
               const Spacer(),
               // Add node button
               TextButton.icon(
@@ -411,6 +480,40 @@ class _BottomBar extends StatelessWidget {
     );
   }
 
+  _DocStats _computeStats(List nodes) {
+    final buffer = StringBuffer();
+    _collectContent(nodes, buffer);
+    final text = buffer.toString();
+
+    final words = text.trim().isEmpty
+        ? 0
+        : text.trim().split(RegExp(r'\s+')).length;
+    final chars = text.length;
+    final lines = text.isEmpty ? 0 : text.split('\n').length;
+    final nodeCount = _countNodes(nodes);
+    final readTime = (words / 200).ceil().clamp(1, 9999);
+
+    return _DocStats(
+      nodeCount: nodeCount,
+      wordCount: words,
+      charCount: chars,
+      lineCount: lines,
+      readTimeMinutes: text.trim().isEmpty ? 0 : readTime,
+    );
+  }
+
+  void _collectContent(List nodes, StringBuffer buffer) {
+    for (final node in nodes) {
+      final content = (node as dynamic).content as String;
+      if (content.isNotEmpty) {
+        buffer.writeln(content);
+      }
+      if (node.children.isNotEmpty) {
+        _collectContent(node.children, buffer);
+      }
+    }
+  }
+
   int _countNodes(List nodes) {
     int count = 0;
     for (final node in nodes) {
@@ -421,4 +524,29 @@ class _BottomBar extends StatelessWidget {
     }
     return count;
   }
+
+  String _formatNumber(int n) {
+    if (n < 1000) return '$n';
+    if (n < 1000000) {
+      final k = n / 1000;
+      return '${k.toStringAsFixed(k < 10 ? 1 : 0)}k';
+    }
+    return '${(n / 1000000).toStringAsFixed(1)}M';
+  }
+}
+
+class _DocStats {
+  final int nodeCount;
+  final int wordCount;
+  final int charCount;
+  final int lineCount;
+  final int readTimeMinutes;
+
+  const _DocStats({
+    required this.nodeCount,
+    required this.wordCount,
+    required this.charCount,
+    required this.lineCount,
+    required this.readTimeMinutes,
+  });
 }
