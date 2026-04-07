@@ -26,16 +26,18 @@ class WebImportService {
     // Pre-process: resolve relative image URLs to absolute
     htmlContent = _resolveImageUrls(htmlContent, uri);
 
-    // Pre-process: convert math from various sources to LaTeX delimiters
-    htmlContent = _convertMathElements(htmlContent);       // MathML alttext
-    htmlContent = _convertDisplayEquations(htmlContent);   // arxiv ltx_equation tables
-    htmlContent = _convertMathJaxScripts(htmlContent);     // <script type="math/tex">
-    htmlContent = _convertKaTeXAnnotations(htmlContent);   // KaTeX <annotation>
+    // Order matters: convert display equations first (they contain <math> tags
+    // inside <table>s that we don't want the inline pass to grab).
+    htmlContent = _convertDisplayEquations(htmlContent);
+    htmlContent = _convertMathJaxScripts(htmlContent);
+    htmlContent = _convertKaTeXAnnotations(htmlContent);
+    // Inline math last — only picks up remaining <math> tags
+    htmlContent = _convertMathElements(htmlContent);
 
     // Convert HTML to markdown
     var markdown = html2md.convert(htmlContent);
 
-    // Post-process: convert MathJax \(...\) and \[...\] delimiters to $/$$ syntax
+    // Post-process: convert MathJax delimiters to $/$$ syntax
     markdown = _convertMathJaxDelimiters(markdown);
 
     // Post-process: catch any remaining relative image URLs in markdown
@@ -48,50 +50,111 @@ class WebImportService {
     return markdown;
   }
 
-  /// Replace `<math alttext="...">` elements with inline LaTeX `$...$`.
-  /// This handles arxiv-style MathML with alttext containing LaTeX source.
+  /// Whether an alttext string looks like real LaTeX math worth wrapping in $.
+  /// Rejects trivial content like single characters, punctuation, or plain numbers.
+  static bool _isNonTrivialLatex(String latex) {
+    final trimmed = latex.trim();
+    if (trimmed.isEmpty) return false;
+    // Single character or symbol — not worth wrapping
+    if (trimmed.length <= 2) return false;
+    // Contains LaTeX commands (backslash), subscripts, superscripts, or fractions
+    if (trimmed.contains(r'\') ||
+        trimmed.contains('_') ||
+        trimmed.contains('^') ||
+        trimmed.contains('{')) {
+      return true;
+    }
+    // Multi-character expressions with operators or parens
+    if (RegExp(r'[a-zA-Z].*[=+\-*/(<>]').hasMatch(trimmed)) return true;
+    // Plain number or single word — not math
+    if (RegExp(r'^[\w.]+$').hasMatch(trimmed)) return false;
+    // Has multiple tokens separated by spaces/operators — likely math
+    if (trimmed.contains(' ') && trimmed.length > 4) return true;
+    return false;
+  }
+
+  /// Replace remaining `<math alttext="...">` elements with inline LaTeX `$...$`.
+  /// Only wraps content that looks like real LaTeX, not trivial symbols or numbers.
   String _convertMathElements(String html) {
-    // Match <math ... alttext="LATEX" ...>...</math>
     final mathRegex = RegExp(
       r'<math[^>]*\balttext="([^"]*)"[^>]*>.*?</math>',
       dotAll: true,
     );
 
     return html.replaceAllMapped(mathRegex, (match) {
-      final latex = match.group(1)!;
-      // Unescape HTML entities in the alttext
-      final unescaped = _unescapeHtml(latex);
-      return ' \$$unescaped\$ ';
+      final latex = _unescapeHtml(match.group(1)!);
+      if (_isNonTrivialLatex(latex)) {
+        return ' \$$latex\$ ';
+      }
+      // For trivial content, just output the text without math delimiters
+      return ' $latex ';
     });
   }
 
-  /// Replace `<table class="ltx_equation">` containing math alttext
-  /// with display math `$$ ... $$`.
+  /// Replace display equation tables with `$$ ... $$` blocks.
+  /// Handles both `ltx_equation` and `ltx_equationgroup` tables.
   String _convertDisplayEquations(String html) {
-    // Match equation tables that contain math with alttext
-    final eqnRegex = RegExp(
-      r'<table[^>]*class="ltx_equation[^"]*"[^>]*>.*?</table>',
-      dotAll: true,
+    // Process equation groups and equations. Use a regex that finds the
+    // opening tag and then manually finds the balanced closing </table>.
+    final openTagRegex = RegExp(
+      r'<table[^>]*class="ltx_equation(?:group)?[^"]*"[^>]*>',
     );
 
-    return html.replaceAllMapped(eqnRegex, (match) {
-      final tableHtml = match.group(0)!;
-      // Extract all alttext values from math elements inside
-      final altRegex = RegExp(r'alttext="([^"]*)"');
-      final altMatches = altRegex.allMatches(tableHtml);
-      if (altMatches.isEmpty) return tableHtml;
+    // Work through the HTML finding each equation table
+    final buffer = StringBuffer();
+    var lastEnd = 0;
 
-      // Join all math fragments (some equations have multiple <math> in one row)
-      final latex = altMatches
-          .map((m) => _unescapeHtml(m.group(1)!))
-          .join(' ');
-      return '\n\n\$\$\n$latex\n\$\$\n\n';
-    });
+    for (final openMatch in openTagRegex.allMatches(html)) {
+      // Find the balanced closing </table> (accounting for nested tables)
+      final tableStart = openMatch.start;
+      final afterOpen = openMatch.end;
+      var depth = 1;
+      var pos = afterOpen;
+
+      while (depth > 0 && pos < html.length) {
+        final nextOpen = html.indexOf('<table', pos);
+        final nextClose = html.indexOf('</table>', pos);
+
+        if (nextClose == -1) break; // malformed HTML
+
+        if (nextOpen != -1 && nextOpen < nextClose) {
+          depth++;
+          pos = nextOpen + 6;
+        } else {
+          depth--;
+          if (depth == 0) {
+            final tableEnd = nextClose + '</table>'.length;
+            final tableHtml = html.substring(tableStart, tableEnd);
+
+            buffer.write(html.substring(lastEnd, tableStart));
+
+            // Extract alttext from all math elements inside
+            final altRegex = RegExp(r'alttext="([^"]*)"');
+            final altMatches = altRegex.allMatches(tableHtml).toList();
+
+            if (altMatches.isNotEmpty) {
+              final latex = altMatches
+                  .map((m) => _unescapeHtml(m.group(1)!))
+                  .join(' ');
+              buffer.write('\n\n\$\$\n$latex\n\$\$\n\n');
+            } else {
+              buffer.write(tableHtml);
+            }
+
+            lastEnd = tableEnd;
+          }
+          pos = nextClose + '</table>'.length;
+        }
+      }
+    }
+
+    buffer.write(html.substring(lastEnd));
+    return buffer.toString();
   }
 
-  /// Convert <script type="math/tex">...</script> (older MathJax) to $ delimiters.
+  /// Convert `<script type="math/tex">` (older MathJax) to `$` delimiters.
   String _convertMathJaxScripts(String html) {
-    // Display math: <script type="math/tex; mode=display">
+    // Display math
     html = html.replaceAllMapped(
       RegExp(
         r'<script[^>]*type="math/tex;\s*mode=display"[^>]*>(.*?)</script>',
@@ -99,7 +162,7 @@ class WebImportService {
       ),
       (m) => '\n\n\$\$\n${_unescapeHtml(m.group(1)!)}\n\$\$\n\n',
     );
-    // Inline math: <script type="math/tex">
+    // Inline math
     html = html.replaceAllMapped(
       RegExp(
         r'<script[^>]*type="math/tex"[^>]*>(.*?)</script>',
@@ -113,10 +176,6 @@ class WebImportService {
   /// Convert KaTeX rendered output back to LaTeX source.
   /// KaTeX stores the source in `<annotation encoding="application/x-tex">`.
   String _convertKaTeXAnnotations(String html) {
-    // Find <span class="katex-display">...<annotation encoding="application/x-tex">LATEX</annotation>...</span>
-    // and <span class="katex">...<annotation>...</span>
-    // Replace the entire katex span with the LaTeX from the annotation.
-
     // Display KaTeX
     html = html.replaceAllMapped(
       RegExp(
@@ -125,7 +184,6 @@ class WebImportService {
       ),
       (m) => '\n\n\$\$\n${_unescapeHtml(m.group(1)!)}\n\$\$\n\n',
     );
-
     // Inline KaTeX
     html = html.replaceAllMapped(
       RegExp(
@@ -134,11 +192,10 @@ class WebImportService {
       ),
       (m) => ' \$${_unescapeHtml(m.group(1)!)}\$ ',
     );
-
     return html;
   }
 
-  /// Resolve relative src attributes in <img> tags to absolute URLs.
+  /// Resolve relative src attributes in `<img>` tags to absolute URLs.
   String _resolveImageUrls(String html, Uri baseUri) {
     final imgRegex = RegExp(r'(<img[^>]*\bsrc=")([^"]+)(")', dotAll: true);
     return html.replaceAllMapped(imgRegex, (match) {
@@ -150,7 +207,7 @@ class WebImportService {
     });
   }
 
-  /// Resolve relative image URLs in markdown ![alt](url) syntax.
+  /// Resolve relative image URLs in markdown `![alt](url)` syntax.
   String _resolveMarkdownImageUrls(String markdown, Uri baseUri) {
     final imgRegex = RegExp(r'(!\[[^\]]*\]\()([^)]+)(\))');
     return markdown.replaceAllMapped(imgRegex, (match) {
@@ -165,7 +222,7 @@ class WebImportService {
     });
   }
 
-  /// Convert MathJax \(...\) → $...$ and \[...\] → $$...$$ delimiters in text.
+  /// Convert MathJax `\(...\)` to `$...$` and `\[...\]` to `$$...$$`.
   String _convertMathJaxDelimiters(String text) {
     // Display: \[...\]
     text = text.replaceAllMapped(
