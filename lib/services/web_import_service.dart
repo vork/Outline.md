@@ -37,6 +37,10 @@ class WebImportService {
     // Convert HTML to markdown
     var markdown = html2md.convert(htmlContent);
 
+    // Post-process: html2md escapes backslashes (\→\\) which breaks LaTeX.
+    // Restore single backslashes inside math delimiters.
+    markdown = _unescapeBackslashesInMath(markdown);
+
     // Post-process: convert MathJax delimiters to $/$$ syntax
     markdown = _convertMathJaxDelimiters(markdown);
 
@@ -222,17 +226,47 @@ class WebImportService {
     });
   }
 
+  /// Restore single backslashes inside math delimiters.
+  /// html2md escapes `\` to `\\` which breaks LaTeX rendering.
+  String _unescapeBackslashesInMath(String text) {
+    // Display math: $$...$$
+    text = text.replaceAllMapped(
+      RegExp(r'\$\$(.*?)\$\$', dotAll: true),
+      (m) => '\$\$${m.group(1)!.replaceAll(r'\\', r'\')}\$\$',
+    );
+    // Inline math: $...$  (but not $$)
+    text = text.replaceAllMapped(
+      RegExp(r'(?<!\$)\$(?!\$)(.*?)(?<!\$)\$(?!\$)'),
+      (m) => '\$${m.group(1)!.replaceAll(r'\\', r'\')}\$',
+    );
+    return text;
+  }
+
   /// Convert MathJax `\(...\)` to `$...$` and `\[...\]` to `$$...$$`.
+  /// Only converts if the content looks like LaTeX math, not escaped markdown.
   String _convertMathJaxDelimiters(String text) {
-    // Display: \[...\]
+    // Display: \[...\] — only if content contains LaTeX commands
     text = text.replaceAllMapped(
       RegExp(r'\\\[(.*?)\\\]', dotAll: true),
-      (m) => '\n\$\$\n${m.group(1)!.trim()}\n\$\$\n',
+      (m) {
+        final content = m.group(1)!;
+        // Skip if it looks like markdown links [text](url) rather than LaTeX
+        if (content.contains('](') || !content.contains(r'\')) {
+          return m.group(0)!;
+        }
+        return '\n\$\$\n${content.trim()}\n\$\$\n';
+      },
     );
-    // Inline: \(...\)
+    // Inline: \(...\) — only if content contains LaTeX commands
     text = text.replaceAllMapped(
       RegExp(r'\\\((.*?)\\\)', dotAll: true),
-      (m) => '\$${m.group(1)!}\$',
+      (m) {
+        final content = m.group(1)!;
+        if (!content.contains(r'\') && !_isNonTrivialLatex(content)) {
+          return m.group(0)!;
+        }
+        return '\$$content\$';
+      },
     );
     return text;
   }
