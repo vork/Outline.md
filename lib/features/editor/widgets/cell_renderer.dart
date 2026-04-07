@@ -14,6 +14,7 @@ class CellRenderer extends StatelessWidget {
   final VoidCallback? onTap;
   final bool isCollapsed;
   final String? documentBasePath;
+  final double fontScale;
 
   const CellRenderer({
     super.key,
@@ -21,6 +22,7 @@ class CellRenderer extends StatelessWidget {
     this.onTap,
     this.isCollapsed = false,
     this.documentBasePath,
+    this.fontScale = 1.0,
   });
 
   @override
@@ -72,7 +74,7 @@ class CellRenderer extends StatelessWidget {
       selectable: false,
       inlineSyntaxes: [_MathInlineSyntax()],
       builders: {
-        'code': _CodeBlockBuilder(theme),
+        'code': _CodeBlockBuilder(theme, fontScale: fontScale),
         'math': _MathInlineBuilder(theme),
       },
       onTapLink: (text, href, title) {},
@@ -383,8 +385,9 @@ class _MathInlineBuilder extends MarkdownElementBuilder {
 
 class _CodeBlockBuilder extends MarkdownElementBuilder {
   final ThemeData theme;
+  final double fontScale;
 
-  _CodeBlockBuilder(this.theme);
+  _CodeBlockBuilder(this.theme, {this.fontScale = 1.0});
 
   @override
   Widget? visitElementAfterWithContext(
@@ -398,6 +401,7 @@ class _CodeBlockBuilder extends MarkdownElementBuilder {
       return MermaidDiagram(
         source: element.textContent.trim(),
         brightness: theme.brightness,
+        fontScale: fontScale,
       );
     }
     return null;

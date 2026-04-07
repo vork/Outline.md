@@ -529,13 +529,19 @@ class _FontSizeControl extends ConsumerWidget {
     final theme = Theme.of(context);
     final color = theme.colorScheme.onSurface.withValues(alpha: 0.7);
 
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(Icons.text_fields, size: 16, color: color),
-        SizedBox(
-          width: 90,
-          child: SliderTheme(
+    // GestureDetector absorbs horizontal drags so they don't trigger
+    // the toolbar's window-drag handler.
+    return GestureDetector(
+      onHorizontalDragStart: (_) {},
+      onHorizontalDragUpdate: (_) {},
+      onHorizontalDragEnd: (_) {},
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.text_fields, size: 16, color: color),
+          SizedBox(
+            width: 90,
+            child: SliderTheme(
             data: SliderThemeData(
               trackHeight: 2,
               thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
@@ -560,6 +566,7 @@ class _FontSizeControl extends ConsumerWidget {
           style: TextStyle(fontSize: 10, color: color),
         ),
       ],
+    ),
     );
   }
 }

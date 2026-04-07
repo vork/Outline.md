@@ -252,6 +252,7 @@ class _OutlineCellState extends ConsumerState<OutlineCell> {
                                     isCollapsed: widget.node.isCollapsed &&
                                         widget.node.hasBody,
                                     documentBasePath: doc.filePath,
+                                    fontScale: ref.watch(fontScaleProvider),
                                     onTap: () {
                                       ref
                                           .read(editorStateProvider.notifier)

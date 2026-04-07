@@ -9,11 +9,13 @@ import 'package:webview_flutter/webview_flutter.dart';
 class MermaidDiagram extends StatefulWidget {
   final String source;
   final Brightness brightness;
+  final double fontScale;
 
   const MermaidDiagram({
     super.key,
     required this.source,
     required this.brightness,
+    this.fontScale = 1.0,
   });
 
   @override
@@ -39,7 +41,8 @@ class _MermaidDiagramState extends State<MermaidDiagram> {
   @override
   void didUpdateWidget(covariant MermaidDiagram oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.brightness != widget.brightness) {
+    if (oldWidget.brightness != widget.brightness ||
+        oldWidget.fontScale != widget.fontScale) {
       setState(() {
         _ready = false;
         _error = null;
@@ -122,7 +125,7 @@ class _MermaidDiagramState extends State<MermaidDiagram> {
         titleColor: '$fg',
         edgeLabelBackground: '$bg',
         fontFamily: 'system-ui, -apple-system, sans-serif',
-        fontSize: '14px',
+        fontSize: '${(14 * widget.fontScale).round()}px',
         background: '$bg',
       },
       securityLevel: 'loose',
