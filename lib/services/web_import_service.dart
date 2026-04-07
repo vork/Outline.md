@@ -50,6 +50,9 @@ class WebImportService {
     // Post-process: catch any remaining relative image URLs in markdown
     markdown = _resolveMarkdownImageUrls(markdown, uri);
 
+    // Post-process: collapse triple+ newlines to double (paragraph breaks)
+    markdown = markdown.replaceAll(RegExp(r'\n{3,}'), '\n\n');
+
     if (markdown.trim().isEmpty) {
       throw Exception('No content extracted from URL');
     }
@@ -91,10 +94,10 @@ class WebImportService {
     return html.replaceAllMapped(mathRegex, (match) {
       final latex = _unescapeHtml(match.group(1)!);
       if (_isNonTrivialLatex(latex)) {
-        return ' \$$latex\$ ';
+        return '\$$latex\$';
       }
       // For trivial content, just output the text without math delimiters
-      return ' $latex ';
+      return latex;
     });
   }
 
