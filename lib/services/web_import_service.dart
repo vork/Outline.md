@@ -48,7 +48,7 @@ class WebImportService {
     return markdown;
   }
 
-  /// Replace <math alttext="...">...</math> with inline LaTeX $...$
+  /// Replace `<math alttext="...">` elements with inline LaTeX `$...$`.
   /// This handles arxiv-style MathML with alttext containing LaTeX source.
   String _convertMathElements(String html) {
     // Match <math ... alttext="LATEX" ...>...</math>
@@ -65,8 +65,8 @@ class WebImportService {
     });
   }
 
-  /// Replace <table class="ltx_equation ...">...<math alttext="...">...</table>
-  /// with display math $$ ... $$
+  /// Replace `<table class="ltx_equation">` containing math alttext
+  /// with display math `$$ ... $$`.
   String _convertDisplayEquations(String html) {
     // Match equation tables that contain math with alttext
     final eqnRegex = RegExp(
@@ -111,7 +111,7 @@ class WebImportService {
   }
 
   /// Convert KaTeX rendered output back to LaTeX source.
-  /// KaTeX stores the source in <annotation encoding="application/x-tex">
+  /// KaTeX stores the source in `<annotation encoding="application/x-tex">`.
   String _convertKaTeXAnnotations(String html) {
     // Find <span class="katex-display">...<annotation encoding="application/x-tex">LATEX</annotation>...</span>
     // and <span class="katex">...<annotation>...</span>
