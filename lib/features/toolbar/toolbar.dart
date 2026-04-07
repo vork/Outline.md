@@ -538,6 +538,16 @@ class _StylePanel extends ConsumerWidget {
     final fg = isDark ? const Color(0xFFE0E0E0) : const Color(0xFF1A1A1A);
     final labelStyle = TextStyle(fontSize: 13, color: fg);
 
+    final screenSize = MediaQuery.sizeOf(context);
+    const panelWidth = 260.0;
+    const panelHeight = 200.0; // approximate
+    const margin = 8.0;
+
+    final left = anchor.dx.clamp(margin, screenSize.width - panelWidth - margin);
+    final top = anchor.dy + 4 + panelHeight > screenSize.height - margin
+        ? anchor.dy - panelHeight - 4 // flip above the button
+        : anchor.dy + 4;
+
     return Stack(
       children: [
         Positioned.fill(
@@ -547,8 +557,8 @@ class _StylePanel extends ConsumerWidget {
           ),
         ),
         Positioned(
-          left: anchor.dx,
-          top: anchor.dy + 4,
+          left: left,
+          top: top,
           child: Theme(
             data: panelTheme,
             child: Material(
