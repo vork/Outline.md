@@ -175,6 +175,55 @@ int detectHeadingLevel(String content) {
   return 0;
 }
 
+/// Rewrite the first line's `#` prefix so it matches [level].
+/// [level] == 0 strips the prefix; 1-6 replaces/adds it.
+String syncHeadingPrefix(String content, int level) {
+  if (content.isEmpty) {
+    return level > 0 ? '${'#' * level} ' : content;
+  }
+  final newlineIdx = content.indexOf('\n');
+  final firstLine =
+      newlineIdx >= 0 ? content.substring(0, newlineIdx) : content;
+  final rest = newlineIdx >= 0 ? content.substring(newlineIdx) : '';
+  final stripped = firstLine.replaceFirst(RegExp(r'^\s*#{1,6}\s*'), '');
+  final clamped = level.clamp(0, 6);
+  final newFirst =
+      clamped > 0 ? '${'#' * clamped} $stripped' : stripped;
+  return '$newFirst$rest';
+}
+
+/// Return [node] with its heading level retargeted to [newLevel], shifting all
+/// heading descendants by the same delta so the nested structure stays
+/// consistent. Body-level (0) descendants are left untouched.
+OutlineNode retargetHeadingLevel(OutlineNode node, int newLevel) {
+  final clamped = newLevel.clamp(0, 6);
+  final delta = clamped - node.headingLevel;
+  if (delta == 0) return node;
+  return _shiftHeadingLevels(node, delta, isRoot: true, rootLevel: clamped);
+}
+
+OutlineNode _shiftHeadingLevels(
+  OutlineNode node,
+  int delta, {
+  bool isRoot = false,
+  int rootLevel = 0,
+}) {
+  final newLevel = isRoot
+      ? rootLevel
+      : node.headingLevel > 0
+          ? (node.headingLevel + delta).clamp(1, 6)
+          : 0;
+  final newContent = node.headingLevel > 0 || newLevel > 0
+      ? syncHeadingPrefix(node.content, newLevel)
+      : node.content;
+  return node.copyWith(
+    headingLevel: newLevel,
+    content: newContent,
+    children:
+        node.children.map((c) => _shiftHeadingLevels(c, delta)).toList(),
+  );
+}
+
 /// Rebuild tree hierarchy from a flat list of nodes based on heading levels.
 /// Preserves collapse state from the old tree.
 List<OutlineNode> buildTreeFromFlat(List<OutlineNode> flat) {

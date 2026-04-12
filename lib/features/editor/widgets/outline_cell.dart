@@ -60,11 +60,15 @@ class _OutlineCellState extends ConsumerState<OutlineCell> {
         if (renderBox == null) return;
         final localPos = renderBox.globalToLocal(details.offset);
         final height = renderBox.size.height;
-        final third = height / 3;
+        // Carve narrow "between cells" bands at the edges, leaving the
+        // generous middle area for nesting. Edge band is 22% or at most 10px
+        // on short cells, whichever is smaller — so tall cells still have
+        // an easy-to-hit between zone.
+        final edgeBand = (height * 0.22).clamp(6.0, 14.0);
 
-        final zone = localPos.dy < third
+        final zone = localPos.dy < edgeBand
             ? _DropZone.top
-            : localPos.dy > third * 2
+            : localPos.dy > height - edgeBand
                 ? _DropZone.bottom
                 : _DropZone.center;
 
@@ -78,31 +82,33 @@ class _OutlineCellState extends ConsumerState<OutlineCell> {
         final isActive = isSelected || isEditing;
         final dimmed = focusMode && !isActive;
 
+        final showTop =
+            isDraggingOver && _activeDropZone == _DropZone.top;
+        final showBottom =
+            isDraggingOver && _activeDropZone == _DropZone.bottom;
+        final showCenter =
+            isDraggingOver && _activeDropZone == _DropZone.center;
+        // Caret sits at the prospective child's indent position.
+        final childIndent = (widget.depth + 1) * 24.0;
+
         return AnimatedOpacity(
           duration: const Duration(milliseconds: 200),
           opacity: dimmed ? 0.25 : 1.0,
-          child: AnimatedContainer(
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+          AnimatedContainer(
           duration: const Duration(milliseconds: 100),
           decoration: BoxDecoration(
             color: isSelected
                 ? theme.colorScheme.primary.withValues(alpha: 0.06)
-                : isDraggingOver && _activeDropZone == _DropZone.center
+                : showCenter
                     ? theme.colorScheme.primary.withValues(alpha: 0.08)
                     : null,
             border: Border(
-              top: BorderSide(
-                color: isDraggingOver && _activeDropZone == _DropZone.top
-                    ? theme.colorScheme.primary
-                    : Colors.transparent,
-                width: 2,
-              ),
               bottom: BorderSide(
-                color: isDraggingOver && _activeDropZone == _DropZone.bottom
-                    ? theme.colorScheme.primary
-                    : theme.dividerColor.withValues(alpha: 0.5),
-                width: isDraggingOver && _activeDropZone == _DropZone.bottom
-                    ? 2
-                    : 0.5,
+                color: theme.dividerColor.withValues(alpha: 0.5),
+                width: 0.5,
               ),
             ),
           ),
@@ -303,6 +309,36 @@ class _OutlineCellState extends ConsumerState<OutlineCell> {
             ),
           ),
         ),
+              // Thick divider for "drop between cells" (same level).
+              if (showTop)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  top: -2,
+                  child: _SiblingDropLine(
+                    color: theme.colorScheme.primary,
+                  ),
+                ),
+              if (showBottom)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: -2,
+                  child: _SiblingDropLine(
+                    color: theme.colorScheme.primary,
+                  ),
+                ),
+              // Caret indicator for "nest one level below".
+              if (showCenter)
+                Positioned(
+                  left: childIndent,
+                  bottom: 2,
+                  child: _NestCaretIndicator(
+                    color: theme.colorScheme.primary,
+                  ),
+                ),
+            ],
+          ),
         );
       },
     );
@@ -324,6 +360,73 @@ class _OutlineCellState extends ConsumerState<OutlineCell> {
 }
 
 enum _DropZone { top, center, bottom }
+
+/// A thick horizontal bar with a rounded cap on the left, used to indicate
+/// that a dragged cell will be dropped between two cells at the same level.
+class _SiblingDropLine extends StatelessWidget {
+  final Color color;
+  const _SiblingDropLine({required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Row(
+        children: [
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(
+              color: color,
+              shape: BoxShape.circle,
+            ),
+          ),
+          Expanded(
+            child: Container(
+              height: 3,
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(1.5),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A caret (chevron) that appears under the target cell at the prospective
+/// child's indent position, indicating that the dropped cell will be nested
+/// one level below.
+class _NestCaretIndicator extends StatelessWidget {
+  final Color color;
+  const _NestCaretIndicator({required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.subdirectory_arrow_right,
+            size: 14,
+            color: color,
+          ),
+          const SizedBox(width: 2),
+          Container(
+            width: 18,
+            height: 2,
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(1),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 class _CollapseToggle extends StatelessWidget {
   final bool isCollapsed;

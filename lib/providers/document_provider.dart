@@ -286,10 +286,12 @@ class DocumentNotifier extends Notifier<OutlineDocument> {
     if (nodeId == beforeId) return;
     if (isDescendant(state.nodes, nodeId, beforeId)) return;
     final node = findNode(state.nodes, nodeId);
-    if (node == null) return;
+    final target = findNode(state.nodes, beforeId);
+    if (node == null || target == null) return;
+    final adjusted = retargetHeadingLevel(node, target.headingLevel);
     _mutate((nodes) {
       final removed = removeNode(nodes, nodeId);
-      return insertBefore(removed, beforeId, node);
+      return insertBefore(removed, beforeId, adjusted);
     });
   }
 
@@ -297,10 +299,12 @@ class DocumentNotifier extends Notifier<OutlineDocument> {
     if (nodeId == afterId) return;
     if (isDescendant(state.nodes, nodeId, afterId)) return;
     final node = findNode(state.nodes, nodeId);
-    if (node == null) return;
+    final target = findNode(state.nodes, afterId);
+    if (node == null || target == null) return;
+    final adjusted = retargetHeadingLevel(node, target.headingLevel);
     _mutate((nodes) {
       final removed = removeNode(nodes, nodeId);
-      return insertAfter(removed, afterId, node);
+      return insertAfter(removed, afterId, adjusted);
     });
   }
 
@@ -311,10 +315,10 @@ class DocumentNotifier extends Notifier<OutlineDocument> {
     if (node == null) return;
     final parent = findNode(state.nodes, parentId);
     if (parent == null) return;
-    final newLevel = parent.headingLevel + 1;
-    final adjusted = node.copyWith(
-      headingLevel: newLevel.clamp(0, 6),
-    );
+    // Nesting one level below the target: parent+1 for headings; body parents
+    // already promote their children via heading level 1.
+    final newLevel = (parent.headingLevel + 1).clamp(1, 6);
+    final adjusted = retargetHeadingLevel(node, newLevel);
     _mutate((nodes) {
       final removed = removeNode(nodes, nodeId);
       return addChild(removed, parentId, adjusted);
